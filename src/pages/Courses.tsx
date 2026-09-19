@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Plus, BookOpen, ExternalLink, Calendar, Trash2, Sparkles, Search, Layers, Upload, CheckCircle2, ChevronRight, FileText, ArrowRight, StickyNote } from 'lucide-react';
 import { Card } from '../components/ui/Card';
@@ -56,7 +56,26 @@ export const Courses: React.FC = () => {
   const { sessions } = useSessionStore();
   const { notes, setActiveNote, createNote, deleteNote, fetchNotes } = useNotesStore();
 
-  const [activeView, setActiveView] = useState<'roadmap' | 'courses'>('roadmap');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewParam = searchParams.get('view');
+  const [activeView, setActiveViewState] = useState<'roadmap' | 'courses'>(
+    viewParam === 'courses' ? 'courses' : 'roadmap'
+  );
+
+  useEffect(() => {
+    if (viewParam === 'courses' || viewParam === 'roadmap') {
+      setActiveViewState(viewParam);
+    }
+  }, [viewParam]);
+
+  const setActiveView = useCallback((view: 'roadmap' | 'courses') => {
+    setActiveViewState(view);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('view', view);
+      return next;
+    });
+  }, [setSearchParams]);
   const [enrolledNotice, setEnrolledNotice] = useState<string | null>(null);
   const [addedTopicNotice, setAddedTopicNotice] = useState<string | null>(null);
 
