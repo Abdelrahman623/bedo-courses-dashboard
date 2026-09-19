@@ -41,7 +41,7 @@ export const Settings: React.FC = () => {
     return profile?.username || user?.user_metadata?.username || 'bedo';
   });
   const [bio, setBio] = useState(() => {
-    return profile?.bio || storage.get('profile_bio', 'Data Analyst in training · Mastering SQL, Python, and BI tools');
+    return profile?.bio || storage.get('profile_bio', 'Continuous learner · Tracking my learning journey');
   });
   const [weeklyGoalHours, setWeeklyGoalHours] = useState(() => {
     return profile?.weekly_goal_hours || storage.get('profile_weekly_goal', 10);
@@ -356,9 +356,8 @@ export const Settings: React.FC = () => {
     setTimeout(() => setBackupMsg(null), 3000);
   };
 
-  // Reset Roadmap Topic Progress
   const handleResetRoadmap = () => {
-    if (window.confirm('Reset all Data Analyst roadmap topics to "Not Started"? Your study notes will be preserved.')) {
+    if (window.confirm('Reset all roadmap topics to "Not Started"? Your study notes will be preserved.')) {
       resetLocalRoadmap();
       alert('All roadmap topics have been reset to "Not Started".');
     }

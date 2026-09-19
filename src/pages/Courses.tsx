@@ -658,122 +658,186 @@ export const Courses: React.FC = () => {
           <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-5xl mx-auto">
             {/* 1. PRIMARY ROADMAP HERO CARD */}
             <motion.div variants={item}>
-              <div className="p-6 rounded-2xl border border-white/[0.08] bg-[#0E121B] relative overflow-hidden shadow-xl">
-                {/* Subtle ambient accent glow */}
-                <div className="absolute -top-24 -right-24 w-72 h-72 bg-accent-amber/10 rounded-full blur-3xl pointer-events-none" />
-
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
-                  <div className="flex-1 min-w-0 space-y-3.5">
-                    {/* Status & Path Type */}
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                        In Progress
+              {totalTopics === 0 && !activeTemplate ? (
+                <div className="p-6 rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#0E121B] to-[#141A28] relative overflow-hidden shadow-xl">
+                  <div className="absolute -top-24 -right-24 w-72 h-72 bg-accent-amber/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="relative z-10 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-accent-amber/10 text-accent-amber border border-accent-amber/20">
+                        <Sparkles size={12} />
+                        Get Started
                       </span>
-                      <span className="text-xs text-zinc-400 font-medium">
-                        Primary Path
-                      </span>
-                      {activeTemplate && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.04] text-zinc-400 border border-white/6">
-                          {activeTemplate.badge}
-                        </span>
-                      )}
+                      <span className="text-xs text-zinc-400">Step 1 of your journey</span>
                     </div>
-
-                    {/* Title & Description */}
                     <div>
                       <h2 className="text-2xl font-bold text-white tracking-tight">
-                        {activeTemplate?.name ? `${activeTemplate.name} Roadmap` : 'Active Roadmap'}
+                        Choose Your Primary Learning Path
                       </h2>
-                      <p className="text-xs text-zinc-400 mt-1 leading-relaxed max-w-2xl">
-                        {activeTemplate?.description || 'Your custom roadmap curriculum and milestones'}
+                      <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
+                        Select an industry-standard roadmap to begin tracking your curriculum milestones, focus sessions, and course notes. You can also build your own custom curriculum.
                       </p>
                     </div>
 
-                    {/* Progress Section */}
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-400 font-medium">Overall Progress</span>
-                        <span className="text-accent-amber font-mono font-bold">
-                          {pct(completedTopics, totalTopics)}%
-                        </span>
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="w-full h-2 bg-[#171C28] rounded-full overflow-hidden border border-white/[0.04]">
-                        <motion.div
-                          className="h-full bg-gradient-to-r from-accent-amber to-amber-400 rounded-full"
-                          initial={{ width: 0 }}
-                          animate={{ width: `${pct(completedTopics, totalTopics)}%` }}
-                          transition={{ duration: 1, ease: 'easeOut' }}
-                        />
-                      </div>
-
-                      {/* Topic Metrics */}
-                      <div className="flex items-center gap-4 text-xs text-zinc-400 pt-0.5 flex-wrap">
-                        <span>
-                          <strong className="text-white font-semibold font-mono">{completedTopics}</strong> / {totalTopics} topics
-                        </span>
-                        <span>•</span>
-                        <span>
-                          <strong className="text-amber-400 font-semibold font-mono">{inProgressTopics}</strong> in progress
-                        </span>
-                        <span>•</span>
-                        <span>
-                          <strong className="text-zinc-400 font-semibold font-mono">{totalTopics - completedTopics - inProgressTopics}</strong> remaining
-                        </span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <strong className="text-accent-amber font-semibold font-mono">{primaryNotes.length}</strong> linked note{primaryNotes.length === 1 ? '' : 's'}
-                        </span>
-                      </div>
+                    {/* Quick Starter Templates */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                      {[
+                        { id: 'full-stack', label: '🚀 Full-Stack Web', desc: 'Frontend, Backend, APIs' },
+                        { id: 'data-analyst', label: '📊 Data Analyst', desc: 'SQL, Python, BI' },
+                        { id: 'ai-engineer', label: '🤖 AI Engineer', desc: 'PyTorch, LLMs, Agents' },
+                        { id: 'cyber-security', label: '🛡️ Cybersecurity', desc: 'Security, Networks' },
+                      ].map(tpl => (
+                        <button
+                          key={tpl.id}
+                          onClick={() => {
+                            loadTemplate(tpl.id);
+                            setActiveView('roadmap');
+                          }}
+                          className="p-3 rounded-xl bg-white/[0.04] hover:bg-accent-amber/10 border border-white/8 hover:border-accent-amber/30 text-left transition-all cursor-pointer group"
+                        >
+                          <div className="text-xs font-semibold text-white group-hover:text-accent-amber transition-colors">
+                            {tpl.label}
+                          </div>
+                          <div className="text-[10px] text-zinc-500 mt-0.5">{tpl.desc}</div>
+                        </button>
+                      ))}
                     </div>
 
-                    {/* Action Row */}
                     <div className="pt-2 flex items-center gap-3 flex-wrap">
                       <button
-                        onClick={() => setActiveView('roadmap')}
-                        className="px-4 py-2 rounded-xl text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-[#090D14] transition-all flex items-center gap-1.5 cursor-pointer shadow-md font-mono"
-                      >
-                        <ChevronRight size={15} />
-                        <span>Open Roadmap</span>
-                      </button>
-
-                      <button
-                        onClick={handleOpenPrimaryNotes}
-                        className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] hover:border-accent-amber/40 text-zinc-300 border border-white/8 transition-all flex items-center gap-2 cursor-pointer shadow-sm"
-                        title="Open notes panel for this roadmap & course"
-                      >
-                        <FileText size={13} className={primaryNotes.length > 0 ? "text-accent-amber" : "text-zinc-400"} />
-                        <span>Course Notes</span>
-                        {primaryNotes.length > 0 && (
-                          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-accent-amber/15 text-accent-amber font-mono font-bold">
-                            {primaryNotes.length}
-                          </span>
-                        )}
-                      </button>
-
-                      <button
                         onClick={() => setShowTemplateModal(true)}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold bg-accent-amber hover:bg-amber-400 text-[#090D14] transition-all flex items-center gap-1.5 cursor-pointer shadow-md font-mono"
+                      >
+                        <Sparkles size={14} />
+                        <span>Browse All Roadmaps</span>
+                      </button>
+                      <button
+                        onClick={() => setShowCourseModal(true)}
                         className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/8 transition-colors flex items-center gap-1.5 cursor-pointer"
                       >
-                        <Sparkles size={13} className="text-accent-amber" />
-                        <span>Change Path</span>
+                        <Plus size={13} />
+                        <span>Add Custom Course</span>
                       </button>
                     </div>
                   </div>
+                </div>
+              ) : (
+                <div className="p-6 rounded-2xl border border-white/[0.08] bg-[#0E121B] relative overflow-hidden shadow-xl">
+                  {/* Subtle ambient accent glow */}
+                  <div className="absolute -top-24 -right-24 w-72 h-72 bg-accent-amber/10 rounded-full blur-3xl pointer-events-none" />
 
-                  {/* Circular Progress Ring */}
-                  <div className="flex-shrink-0 self-center md:self-auto p-2">
-                    <ProgressRing
-                      value={pct(completedTopics, totalTopics)}
-                      size={94}
-                      stroke={7}
-                      label={`${pct(completedTopics, totalTopics)}%`}
-                    />
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+                    <div className="flex-1 min-w-0 space-y-3.5">
+                      {/* Status & Path Type */}
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          In Progress
+                        </span>
+                        <span className="text-xs text-zinc-400 font-medium">
+                          Primary Path
+                        </span>
+                        {activeTemplate && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.04] text-zinc-400 border border-white/6">
+                            {activeTemplate.badge}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Title & Description */}
+                      <div>
+                        <h2 className="text-2xl font-bold text-white tracking-tight">
+                          {activeTemplate?.name ? `${activeTemplate.name} Roadmap` : 'Active Roadmap'}
+                        </h2>
+                        <p className="text-xs text-zinc-400 mt-1 leading-relaxed max-w-2xl">
+                          {activeTemplate?.description || 'Your custom roadmap curriculum and milestones'}
+                        </p>
+                      </div>
+
+                      {/* Progress Section */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-zinc-400 font-medium">Overall Progress</span>
+                          <span className="text-accent-amber font-mono font-bold">
+                            {pct(completedTopics, totalTopics)}%
+                          </span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full h-2 bg-[#171C28] rounded-full overflow-hidden border border-white/[0.04]">
+                          <motion.div
+                            className="h-full bg-gradient-to-r from-accent-amber to-amber-400 rounded-full"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct(completedTopics, totalTopics)}%` }}
+                            transition={{ duration: 1, ease: 'easeOut' }}
+                          />
+                        </div>
+
+                        {/* Topic Metrics */}
+                        <div className="flex items-center gap-4 text-xs text-zinc-400 pt-0.5 flex-wrap">
+                          <span>
+                            <strong className="text-white font-semibold font-mono">{completedTopics}</strong> / {totalTopics} topics
+                          </span>
+                          <span>•</span>
+                          <span>
+                            <strong className="text-amber-400 font-semibold font-mono">{inProgressTopics}</strong> in progress
+                          </span>
+                          <span>•</span>
+                          <span>
+                            <strong className="text-zinc-400 font-semibold font-mono">{totalTopics - completedTopics - inProgressTopics}</strong> remaining
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1">
+                            <strong className="text-accent-amber font-semibold font-mono">{primaryNotes.length}</strong> linked note{primaryNotes.length === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Action Row */}
+                      <div className="pt-2 flex items-center gap-3 flex-wrap">
+                        <button
+                          onClick={() => setActiveView('roadmap')}
+                          className="px-4 py-2 rounded-xl text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-[#090D14] transition-all flex items-center gap-1.5 cursor-pointer shadow-md font-mono"
+                        >
+                          <ChevronRight size={15} />
+                          <span>Open Roadmap</span>
+                        </button>
+
+                        <button
+                          onClick={handleOpenPrimaryNotes}
+                          className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] hover:border-accent-amber/40 text-zinc-300 border border-white/8 transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+                          title="Open notes panel for this roadmap & course"
+                        >
+                          <FileText size={13} className={primaryNotes.length > 0 ? "text-accent-amber" : "text-zinc-400"} />
+                          <span>Course Notes</span>
+                          {primaryNotes.length > 0 && (
+                            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-accent-amber/15 text-accent-amber font-mono font-bold">
+                              {primaryNotes.length}
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => setShowTemplateModal(true)}
+                          className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/8 transition-colors flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Sparkles size={13} className="text-accent-amber" />
+                          <span>Change Path</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Circular Progress Ring */}
+                    <div className="flex-shrink-0 self-center md:self-auto p-2">
+                      <ProgressRing
+                        value={pct(completedTopics, totalTopics)}
+                        size={94}
+                        stroke={7}
+                        label={`${pct(completedTopics, totalTopics)}%`}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </motion.div>
 
             {/* 2. ENROLLED COURSES CONTAINER */}

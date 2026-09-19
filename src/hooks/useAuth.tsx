@@ -33,7 +33,7 @@ const DEMO_PROFILE: Profile = {
   name: 'Bedo',
   username: 'bedo',
   email: 'bedo@courses.local',
-  bio: 'Data Analyst in training',
+  bio: 'Continuous learner',
   weekly_goal_hours: 10,
   created_at: new Date().toISOString(),
 };

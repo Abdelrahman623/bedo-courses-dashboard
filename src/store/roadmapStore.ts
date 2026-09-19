@@ -51,35 +51,13 @@ interface RoadmapState {
 
 const getInitialNodes = (): RoadmapNode[] => {
   const cached = storage.get<RoadmapNode[] | null>('local_nodes', null);
-  if (!cached) {
-    const fullTpl = ROADMAP_TEMPLATES['data-analyst'];
-    if (fullTpl) {
-      storage.set('local_nodes', fullTpl.nodes);
-      storage.set('local_edges', fullTpl.edges);
-      return fullTpl.nodes;
-    }
-    return [];
-  }
-  if (cached.some(n => n.id === 'da_excel' || n.id === 'da_intro') && cached.length < 25) {
-    const fullTpl = ROADMAP_TEMPLATES['data-analyst'];
-    if (fullTpl) {
-      storage.set('local_nodes', fullTpl.nodes);
-      storage.set('local_edges', fullTpl.edges);
-      return fullTpl.nodes;
-    }
-  }
-  return cached;
+  return cached || [];
 };
 
 const getInitialEdges = (): RoadmapEdge[] => {
   const cachedNodes = storage.get<RoadmapNode[] | null>('local_nodes', null);
-  if (!cachedNodes) {
-    const fullTpl = ROADMAP_TEMPLATES['data-analyst'];
-    return fullTpl ? fullTpl.edges : [];
-  }
-  if (cachedNodes.some(n => n.id === 'da_excel' || n.id === 'da_intro') && cachedNodes.length < 25) {
-    const fullTpl = ROADMAP_TEMPLATES['data-analyst'];
-    if (fullTpl) return fullTpl.edges;
+  if (!cachedNodes || cachedNodes.length === 0) {
+    return [];
   }
   return storage.get<RoadmapEdge[]>('local_edges', []);
 };
@@ -91,7 +69,7 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   loading: false,
   localNodes: getInitialNodes(),
   localEdges: getInitialEdges(),
-  activeTemplateId: storage.get<string | null>('active_template_id', 'data-analyst'),
+  activeTemplateId: storage.get<string | null>('active_template_id', null),
   customTemplates: storage.get<Record<string, RoadmapTemplate>>('custom_templates', {}),
 
   fetchAll: async () => {

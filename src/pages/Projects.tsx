@@ -197,7 +197,7 @@ export const Projects: React.FC = () => {
           <Rocket size={36} className="text-zinc-600 mx-auto mb-3" />
           <h3 className="font-semibold text-white text-base mb-1">No projects registered yet</h3>
           <p className="text-xs text-zinc-400 mb-5 max-w-sm mx-auto">
-            Connect your course capstones and independent data analyst projects to track status and progress.
+            Connect your course capstones and independent projects to track status and progress.
           </p>
           <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowModal(true)}>
             Add First Project
