@@ -243,6 +243,14 @@ export const Courses: React.FC = () => {
     return courses[0] || null;
   }, [activeTemplate, courses, getActiveCourseId]);
 
+  // Courses shown in "Additional Enrolled Courses" — excludes whichever one
+  // is already the Primary Path hero card above, so enrolling your active
+  // template doesn't also duplicate it into the list below.
+  const additionalCourses = useMemo(
+    () => courses.filter(c => c.id !== primaryCourse?.id),
+    [courses, primaryCourse]
+  );
+
   // Notes tied to the Primary Path Hero Card
   const primaryNotes = useMemo(() => {
     if (primaryCourse) {
@@ -893,9 +901,9 @@ export const Courses: React.FC = () => {
                 </div>
 
                 {/* Courses List */}
-                {courses.length > 0 ? (
+                {additionalCourses.length > 0 ? (
                   <div className="space-y-3 pt-1">
-                    {courses.map(course => {
+                    {additionalCourses.map(course => {
                       const matchingTpl = findTemplateForCourse(course);
                       const courseNotes = getNotesForCourse(course.id);
                       return (

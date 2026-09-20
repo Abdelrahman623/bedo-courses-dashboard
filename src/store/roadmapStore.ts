@@ -118,6 +118,27 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
         activeTemplateId: canvas.activeTemplateId ?? null,
         customTemplates: canvas.customTemplates ?? {},
       });
+
+      // Repair accounts where a template was loaded as the Primary Path
+      // before it had a matching `courses` row (the bug that made the
+      // course dropdown empty everywhere it should have shown this path).
+      // Uses the current canvas progress, not the template's defaults, so
+      // completed/in-progress topics aren't reset.
+      const activeTplId = canvas.activeTemplateId;
+      if (activeTplId) {
+        const allTpls = { ...ROADMAP_TEMPLATES, ...(canvas.customTemplates ?? {}) };
+        const tpl = allTpls[activeTplId];
+        const alreadyEnrolled = (courses as Course[] | null)?.some(
+          c => c.roadmap_id === tpl?.id ||
+               c.title.toLowerCase() === (tpl?.name ?? '').toLowerCase() ||
+               (tpl?.roadmapUrl && c.source_url === tpl.roadmapUrl)
+        );
+        if (tpl && !alreadyEnrolled) {
+          void get().addTemplateAsCourse(activeTplId).catch(err =>
+            console.warn('[RoadmapStore] Backfill enrollment failed:', err)
+          );
+        }
+      }
     } catch (err) {
       console.warn('[RoadmapStore] Fetch failed:', err);
     } finally {
@@ -248,6 +269,15 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       activeTemplateId: templateKey,
     });
     get().persistCanvas();
+
+    // Picking a template makes it the Primary Path everywhere in the app —
+    // it needs a real `courses` row and `topics` rows from the moment it's
+    // chosen, or nothing about it (topic status, linked notes) can actually
+    // save. Safe to call every time: addTemplateAsCourse no-ops if a
+    // matching course already exists.
+    void get().addTemplateAsCourse(templateKey).catch(err =>
+      console.warn('[RoadmapStore] Auto-enroll on template load failed:', err)
+    );
   },
 
   clearRoadmap: () => {
@@ -372,7 +402,12 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       created_at: now,
     };
 
-    const newTopics: Topic[] = tpl.nodes.map(n => ({
+    // If this template is the one currently on the canvas, enroll it with
+    // whatever progress is already there (status per node) rather than the
+    // template's pristine defaults — otherwise enrolling after the fact
+    // would silently reset completed/in-progress topics back to 'not_started'.
+    const sourceNodes = get().activeTemplateId === templateKey ? get().localNodes : tpl.nodes;
+    const newTopics: Topic[] = sourceNodes.map(n => ({
       id: n.id,
       course_id: newCourse.id,
       title: n.label,
