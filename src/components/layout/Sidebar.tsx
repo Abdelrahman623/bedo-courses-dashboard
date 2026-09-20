@@ -50,46 +50,98 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 /**
- * Stroke-based NL monogram — clean and sharp at any size
+ * Reformed glowing NL monogram logo from Noname Learn
  */
-const NLLogo: React.FC<{ className?: string }> = ({ className = 'w-7 h-6' }) => (
+const NLLogo: React.FC<{ className?: string }> = ({ className = 'w-7 h-7' }) => (
   <svg
-    viewBox="0 0 56 48"
+    viewBox="0 0 100 100"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     className={className}
   >
     <defs>
-      <filter id="nl-glow-s" x="-60%" y="-60%" width="220%" height="220%">
-        <feGaussianBlur stdDeviation="2" result="blur" />
+      {/* Platinum-silver gradient for main letter strokes */}
+      <linearGradient id="nl-monogram-white" x1="15" y1="12" x2="85" y2="88" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#FFFFFF" />
+        <stop offset="60%" stopColor="#F8FAFC" />
+        <stop offset="100%" stopColor="#CBD5E1" />
+      </linearGradient>
+
+      {/* Radiant electric cyan to cobalt gradient for accent pillar */}
+      <linearGradient id="nl-monogram-blue" x1="32" y1="40" x2="42" y2="86" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#38BDF8" />
+        <stop offset="55%" stopColor="#2563EB" />
+        <stop offset="100%" stopColor="#1D4ED8" />
+      </linearGradient>
+
+      {/* Subtle cyan backlight aura */}
+      <radialGradient id="nl-aura" cx="42%" cy="56%" r="48%">
+        <stop offset="0%" stopColor="rgba(56,189,248,0.3)" />
+        <stop offset="60%" stopColor="rgba(37,99,235,0.12)" />
+        <stop offset="100%" stopColor="rgba(14,165,233,0)" />
+      </radialGradient>
+
+      {/* Glow filter for neon blue accent */}
+      <filter id="nl-glow" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="2.2" result="blur" />
+        <feComponentTransfer in="blur" result="glow">
+          <feFuncA type="linear" slope="0.75" />
+        </feComponentTransfer>
         <feMerge>
-          <feMergeNode in="blur" />
+          <feMergeNode in="glow" />
           <feMergeNode in="SourceGraphic" />
         </feMerge>
       </filter>
+
+      {/* Soft shadow for letter depth */}
+      <filter id="nl-depth" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000000" floodOpacity="0.6" />
+      </filter>
     </defs>
 
-    {/* ── N letter ── */}
-    {/* Left vertical stroke */}
-    <line x1="5" y1="6" x2="5" y2="42" stroke="white" strokeWidth="5" strokeLinecap="round" />
-    {/* Diagonal stroke top-left to bottom-right */}
-    <line x1="5" y1="6" x2="27" y2="42" stroke="white" strokeWidth="5" strokeLinecap="round" />
-    {/* Right vertical stroke */}
-    <line x1="27" y1="6" x2="27" y2="42" stroke="white" strokeWidth="5" strokeLinecap="round" />
+    {/* Ambient backlight glow */}
+    <circle cx="48" cy="52" r="38" fill="url(#nl-aura)" />
 
-    {/* ── Blue accent fill in N's inner crook ── */}
+    {/* === N & L MONOGRAM === */}
+
+    {/* 1. Top stem of 'L' (layered behind N diagonal) */}
+    <g filter="url(#nl-depth)">
+      {/* Top horizontal serif of L */}
+      <path
+        d="M47 28 H63 V31.5 C60.5 31.5 58.5 33 58.5 36 V56 L52.5 48.5 V36 C52.5 33 50.5 31.5 47 31.5 V28 Z"
+        fill="url(#nl-monogram-white)"
+      />
+    </g>
+
+    {/* 2. Distinctive Blue Accent Pillar inside N's crook */}
     <path
-      d="M5 22 L18 42 L27 42 L27 28 Z"
-      fill="#38BDF8"
-      opacity="0.85"
-      filter="url(#nl-glow-s)"
+      d="M32 40.5 L41.5 52 V76.5 L32 86.5 Z"
+      fill="url(#nl-monogram-blue)"
+      filter="url(#nl-glow)"
     />
 
-    {/* ── L letter ── */}
-    {/* Vertical stroke of L */}
-    <line x1="37" y1="6" x2="37" y2="42" stroke="white" strokeWidth="5" strokeLinecap="round" />
-    {/* Horizontal base of L */}
-    <line x1="37" y1="42" x2="51" y2="42" stroke="white" strokeWidth="5" strokeLinecap="round" />
+    {/* 3. Lower stem & horizontal foot of 'L' */}
+    <g filter="url(#nl-depth)">
+      <path
+        d="M52.5 63.5 V80.5 C52.5 83.5 50 85.5 46 86 V88.5 H77 C77 88.5 79.5 88.5 80.5 85 C81.5 81.5 81.5 74 81.5 72 C80.5 76 77 79 72.5 80 H58.5 V71 L52.5 63.5 Z"
+        fill="url(#nl-monogram-white)"
+      />
+    </g>
+
+    {/* 4. The 'N': Left serif stem + Heavy diagonal stroke */}
+    <g filter="url(#nl-depth)">
+      {/* Left stem of N with serifs */}
+      <path
+        d="M16 13 C22 13 25.5 17 26 23 V80.5 C26 83.5 23 85 19 85.5 V88 H33 V85.5 C29 85 26 83.5 26 80.5 V23 C26 19 28.5 15.5 32 13 H16 Z"
+        fill="url(#nl-monogram-white)"
+      />
+
+      {/* Bold diagonal stroke of N crossing over */}
+      <path
+        d="M26 13 L63 88 H52 L22 24 V13 H26 Z"
+        fill="url(#nl-monogram-white)"
+      />
+    </g>
   </svg>
 );
 
@@ -133,16 +185,24 @@ export const Sidebar: React.FC = () => {
       className="h-full flex-shrink-0 bg-gradient-to-b from-[#111A24] via-[#0D141C] to-[#080B10] border-r border-white/[0.08] flex flex-col overflow-hidden relative z-10 transition-all duration-200 ease-out select-none"
     >
       {/* Brand Header */}
-      <div className="flex items-center gap-3 px-3.5 h-[56px] border-b border-white/[0.08] flex-shrink-0">
-        <div className="relative flex items-center justify-center w-11 h-8 rounded-xl bg-sky-500/[0.08] border border-sky-400/25 shadow-[0_0_14px_rgba(56,189,248,0.22)] flex-shrink-0 group">
-          <NLLogo className="w-7 h-6 drop-shadow-[0_0_6px_rgba(56,189,248,0.5)] transition-transform duration-200 group-hover:scale-105" />
+      <div className="flex items-center gap-3 px-4 h-[56px] border-b border-white/[0.08] flex-shrink-0">
+
+        {/* Logo */}
+        <div className="relative flex items-center justify-center w-9 h-9 rounded-[10px] bg-[#081722] border border-sky-400/80 shadow-[0_0_6px_rgba(56,189,248,0.8),0_0_12px_rgba(56,189,248,0.3)] flex-shrink-0 overflow-hidden">
+          <img
+            src="/nl-logo.png"
+            alt="Noname Learn"
+            className="w-7 h-7 object-contain"
+          />
         </div>
+        {/* Brand Name */}
         {!collapsed && (
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-bold text-sm tracking-tight text-white truncate">
+          <div className="flex items-center gap-1 whitespace-nowrap min-w-0">
+            <span className="font-bold text-[18px] leading-none tracking-tight text-white">
               Noname
             </span>
-            <span className="text-sky-400 text-sm font-semibold tracking-tight">
+
+            <span className="text-sky-400 text-[18px] leading-none font-semibold tracking-tight">
               learn
             </span>
           </div>

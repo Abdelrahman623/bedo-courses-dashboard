@@ -161,6 +161,9 @@ const Notes: React.FC = () => {
   // ── Filtered notes list ─────────────────────────────────────────────────
   const isNoteLinked = (n: Note) => n.note_type === 'linked' || Boolean(n.course_id || n.topic_id || n.project_id);
 
+  const linkedCount = notes.filter(isNoteLinked).length;
+  const generalCount = notes.length - linkedCount;
+
   const filtered = notes.filter((n) => {
     const q = searchQuery.toLowerCase();
     const matchesSearch = (
@@ -259,44 +262,47 @@ const Notes: React.FC = () => {
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex overflow-hidden bg-[#0A0D14]">
+    <div className="h-full flex overflow-hidden">
 
       {/* ── LEFT SIDEBAR ─────────────────────────────────────────────────── */}
-      <div className="w-64 flex-shrink-0 flex flex-col bg-[#0D1118] border-r border-white/[0.06]">
+      <div className="w-64 flex-shrink-0 border-r border-white/[0.035] flex flex-col bg-[#11151D]">
 
-        {/* Sidebar Header */}
-        <div className="px-4 pt-4 pb-3 border-b border-white/[0.06]">
-          <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-3">Notes</h2>
-
-          {/* Search */}
+        {/* Search */}
+        <div className="p-3 bg-[#11151D]">
           <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-muted" />
             <input
               type="text"
               placeholder="Search notes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 text-[11px] bg-white/[0.04] border border-white/[0.08] rounded-lg text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-sky-500/40 focus:bg-white/[0.06] transition-all"
+              className="
+                w-full pl-8 pr-3 py-1.5 text-xs
+                bg-bg-surface2 border border-white/6
+                rounded-lg text-txt-primary placeholder:text-txt-muted
+                focus:outline-none focus:border-accent-amber/40
+                transition-colors
+              "
             />
           </div>
         </div>
-
         {/* Type filter tabs */}
-        <div className="px-3 py-2.5 border-b border-white/[0.06]">
-          <div className="flex rounded-lg bg-white/[0.04] border border-white/[0.06] p-0.5 gap-0.5">
+        <div className="px-3 py-2 bg-[#11151D]">
+          <div className="grid grid-cols-3 bg-bg-surface2 rounded-lg p-0.5 gap-0.5 text-center">
             {([
               ['all', `All (${notes.length})`],
-              ['general', `General`],
-              ['linked', `Linked`],
+              ['general', `General (${generalCount})`],
+              ['linked', `Linked (${linkedCount})`]
             ] as const).map(([val, label]) => (
               <button
                 key={val}
                 onClick={() => setNoteTypeFilter(val as any)}
-                className={`flex-1 py-1.5 text-[10px] font-semibold rounded-md transition-all cursor-pointer ${
+                className={`py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer select-none truncate ${
                   noteTypeFilter === val
-                    ? 'bg-amber-400/20 text-amber-300 shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-300'
+                    ? 'bg-accent-amber/15 text-accent-amber shadow-sm'
+                    : 'text-txt-muted hover:text-txt-primary'
                 }`}
+                title={label}
               >
                 {label}
               </button>
@@ -304,8 +310,8 @@ const Notes: React.FC = () => {
           </div>
         </div>
 
-        {/* New Note Button */}
-        <div className="px-3 py-2.5 border-b border-white/[0.06]">
+        {/* New Note */}
+        <div className="p-3 bg-[#11151D]">
           <Button
             variant="primary"
             size="sm"
@@ -316,19 +322,15 @@ const Notes: React.FC = () => {
             New Note
           </Button>
         </div>
-
         {/* Notes list */}
-        <div className="flex-1 overflow-y-auto py-1 scrollbar-none">
+        <div className="flex-1 overflow-y-auto py-1">
           {loading && filtered.length === 0 && (
-            <p className="text-[11px] text-zinc-600 text-center mt-8">Loading...</p>
+            <p className="text-xs text-txt-muted text-center mt-6">Loading...</p>
           )}
           {!loading && filtered.length === 0 && (
-            <div className="flex flex-col items-center gap-2 mt-10 px-4 text-center">
-              <FileText size={28} className="text-zinc-700" />
-              <p className="text-[11px] text-zinc-500">
-                {searchQuery ? 'No notes match your search.' : 'No notes yet. Create one!'}
-              </p>
-            </div>
+            <p className="text-xs text-txt-muted text-center mt-6 px-4">
+              {searchQuery ? 'No notes match your search.' : 'No notes yet.'}
+            </p>
           )}
           <AnimatePresence initial={false}>
             {filtered.map((note, i) => {
@@ -337,44 +339,44 @@ const Notes: React.FC = () => {
               return (
                 <motion.div
                   key={note.id}
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ delay: i * 0.03, duration: 0.15 }}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -8 }}
+                  transition={{ delay: i * 0.03, duration: 0.18 }}
                   onClick={() => setActiveNote(note)}
                   className={[
-                    'group relative mx-2 my-0.5 px-3 py-2.5 rounded-xl cursor-pointer transition-all',
+                    'group relative px-3 py-2.5 cursor-pointer transition-colors',
                     isActive
-                      ? 'bg-amber-400/10 border border-amber-400/25 shadow-sm'
-                      : 'border border-transparent hover:bg-white/[0.04] hover:border-white/[0.08]',
+                    ? 'bg-white/[0.045] border-l-2 border-accent-amber shadow-[inset_0_0_20px_rgba(240,165,0,0.025)]'
+                    : 'border-l-2 border-transparent hover:bg-white/[0.025]'
                   ].join(' ')}
                 >
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start justify-between gap-1">
                     <div className="min-w-0 flex-1">
                       <p className={[
-                        'text-[11px] font-semibold truncate leading-snug',
-                        isActive ? 'text-amber-300' : 'text-zinc-200',
+                        'text-xs font-medium truncate',
+                        isActive ? 'text-accent-amber' : 'text-txt-primary',
                       ].join(' ')}>
                         {note.title || 'Untitled'}
                       </p>
 
+                      {/* Linked Badge */}
                       {link && (
-                        <div className="flex items-center gap-1 mt-0.5 text-[9px] text-amber-400/80 truncate">
+                        <div className="flex items-center gap-1 mt-0.5 text-[10px] text-accent-amber/90 font-medium truncate">
                           <span>{link.icon}</span>
                           <span className="truncate">{link.label}</span>
                         </div>
                       )}
 
-                      <p className="text-[9px] text-zinc-600 mt-0.5">
+                      <p className="text-[10px] text-txt-muted mt-0.5">
                         {formatDate(note.updated_at)}
                       </p>
-
                       {note.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1.5">
+                        <div className="flex flex-wrap gap-1 mt-1">
                           {note.tags.slice(0, 3).map((t) => (
                             <span
                               key={t}
-                              className="text-[8px] px-1.5 py-0.5 rounded-full bg-amber-400/10 text-amber-400/80 border border-amber-400/15"
+                              className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent-amber/10 text-accent-amber"
                             >
                               {t}
                             </span>
@@ -384,9 +386,9 @@ const Notes: React.FC = () => {
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); setDeleteModal(note.id); }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-400/10 flex-shrink-0"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-txt-muted hover:text-accent-coral"
                     >
-                      <Trash2 size={11} />
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </motion.div>
@@ -396,8 +398,8 @@ const Notes: React.FC = () => {
         </div>
 
         {/* Footer count */}
-        <div className="px-4 py-2.5 border-t border-white/[0.06]">
-          <p className="text-[9px] text-zinc-600 text-center tracking-wide">
+        <div className="p-3 border-t border-white/[0.035] bg-[#0F131A]">
+          <p className="text-[10px] text-txt-muted text-center">
             {filtered.length} {filtered.length === 1 ? 'note' : 'notes'}
           </p>
         </div>
@@ -407,13 +409,13 @@ const Notes: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {!activeNote ? (
           /* Empty state */
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shadow-inner">
-              <FileText size={28} className="text-zinc-600" />
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-bg-surface2 flex items-center justify-center">
+              <FileText size={24} className="text-txt-muted" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-zinc-300">Select or create a note</p>
-              <p className="text-xs text-zinc-600 mt-1">
+              <p className="text-txt-secondary font-medium">Select or create a note</p>
+              <p className="text-txt-muted text-xs mt-1">
                 Your notes will appear here with rich text editing
               </p>
             </div>
@@ -430,31 +432,31 @@ const Notes: React.FC = () => {
           /* Active note editor */
           <div className="flex-1 flex flex-col min-h-0">
 
-            {/* ── Top Header ─────────────────────────────────────────────── */}
-            <div className="flex-shrink-0 px-8 pt-6 pb-0">
+            {/* ── Header: Link Bar + Title + Toolbar ─────────────────────── */}
+            <div className="flex-shrink-0 px-6 pt-5 pb-3 bg-[#0D0F14] space-y-2.5">
 
               {/* Linked entity bar */}
-              <div className="flex items-center gap-2 flex-wrap mb-3">
+              <div className="flex items-center gap-2 flex-wrap">
                 {activeLinkInfo ? (
-                  <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-amber-400/10 border border-amber-400/25 text-xs text-amber-300">
+                  <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-accent-amber/10 border border-accent-amber/25 text-xs text-accent-amber">
                     <span className="text-sm">{activeLinkInfo.icon}</span>
-                    <span className="font-semibold truncate max-w-[280px]">{activeLinkInfo.label}</span>
-                    <span className="text-[10px] text-zinc-500 font-mono">({activeLinkInfo.type})</span>
-                    <div className="flex items-center gap-1.5 ml-1 pl-1.5 border-l border-amber-400/20">
+                    <span className="font-semibold truncate max-w-[320px]">{activeLinkInfo.label}</span>
+                    <span className="text-[10px] text-zinc-400 font-mono">({activeLinkInfo.type})</span>
+                    <div className="flex items-center gap-1.5 ml-1 pl-1.5 border-l border-accent-amber/30">
                       <button
                         onClick={() => {
                           setEditLinkType(activeLinkInfo.type);
                           setEditLinkedId(activeNote.course_id || activeNote.topic_id || activeNote.project_id || '');
                           setShowLinkModal(true);
                         }}
-                        className="text-[10px] text-zinc-400 hover:text-white underline cursor-pointer"
+                        className="text-[10px] text-zinc-300 hover:text-white underline cursor-pointer"
                       >
-                        Change
+                        Change Link
                       </button>
                       <button
                         onClick={() => handleApplyEditLink('unlink')}
-                        className="text-[10px] text-zinc-500 hover:text-rose-400 cursor-pointer"
-                        title="Remove link"
+                        className="text-[10px] text-zinc-400 hover:text-rose-400 cursor-pointer ml-0.5"
+                        title="Remove link (convert to general note)"
                       >
                         Unlink
                       </button>
@@ -467,35 +469,128 @@ const Notes: React.FC = () => {
                       setEditLinkedId('');
                       setShowLinkModal(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-dashed border-white/[0.12] text-[11px] text-zinc-500 hover:text-amber-300 hover:border-amber-400/30 transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/8 text-xs text-zinc-400 hover:text-accent-amber transition-all cursor-pointer"
                   >
-                    <Link2 size={11} className="text-amber-400/70" />
+                    <Link2 size={12} className="text-accent-amber" />
                     <span>+ Link to Course, Topic, or Project</span>
                   </button>
                 )}
               </div>
 
               {/* Title */}
-              <input
-                type="text"
-                value={activeNote.title}
-                onChange={handleTitleChange}
-                placeholder="Note title..."
-                className="w-full text-[28px] font-bold bg-transparent border-none outline-none text-zinc-100 placeholder:text-zinc-700 leading-tight tracking-tight mb-4"
-              />
+                <div className="flex items-center gap-2">
+                  <FileText
+                    size={20}
+                    className="flex-shrink-0 text-sky-400"
+                  />
+
+                  <input
+                    type="text"
+                    value={activeNote.title}
+                    onChange={handleTitleChange}
+                    placeholder="Note title..."
+                    className="
+                      w-full text-2xl font-bold bg-transparent border-none outline-none
+                      text-txt-primary placeholder:text-txt-muted/50
+                    "
+                  />
+                </div>
+              {/* Toolbar */}
+              {editor && (
+                <div className="flex items-center gap-0.5 flex-wrap">
+                  <ToolbarBtn
+                    title="Bold"
+                    active={editor.isActive('bold')}
+                    onClick={() => editor.chain().focus().toggleBold().run()}
+                  >
+                    <Bold size={14} />
+                  </ToolbarBtn>
+                  <ToolbarBtn
+                    title="Italic"
+                    active={editor.isActive('italic')}
+                    onClick={() => editor.chain().focus().toggleItalic().run()}
+                  >
+                    <Italic size={14} />
+                  </ToolbarBtn>
+                  <ToolbarBtn
+                    title="Inline Code"
+                    active={editor.isActive('code')}
+                    onClick={() => editor.chain().focus().toggleCode().run()}
+                  >
+                    <Code size={14} />
+                  </ToolbarBtn>
+                  <div className="w-px h-4 bg-white/10 mx-1" />
+                  <ToolbarBtn
+                    title="Bullet List"
+                    active={editor.isActive('bulletList')}
+                    onClick={() => editor.chain().focus().toggleBulletList().run()}
+                  >
+                    <List size={14} />
+                  </ToolbarBtn>
+                  <ToolbarBtn
+                    title="Task List"
+                    active={editor.isActive('taskList')}
+                    onClick={() => editor.chain().focus().toggleTaskList().run()}
+                  >
+                    <CheckSquare size={14} />
+                  </ToolbarBtn>
+                  <div className="w-px h-4 bg-white/10 mx-1" />
+                  <ToolbarBtn
+                    title="Heading 2"
+                    active={editor.isActive('heading', { level: 2 })}
+                    onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                  >
+                    <span className="text-[11px] font-bold">H2</span>
+                  </ToolbarBtn>
+                  <ToolbarBtn
+                    title="Heading 3"
+                    active={editor.isActive('heading', { level: 3 })}
+                    onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+                  >
+                    <span className="text-[11px] font-bold">H3</span>
+                  </ToolbarBtn>
+                  <ToolbarBtn
+                    title="Highlight"
+                    active={editor.isActive('highlight')}
+                    onClick={() => editor.chain().focus().toggleHighlight().run()}
+                  >
+                    <span className="text-[11px] font-bold text-accent-amber">H</span>
+                  </ToolbarBtn>
+                  <div className="w-px h-4 bg-white/10 mx-1" />
+                  <ToolbarBtn
+                    title="Code Block"
+                    active={editor.isActive('codeBlock')}
+                    onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                  >
+                    <span className="text-[10px] font-mono">{String.fromCharCode(60)}/{String.fromCharCode(62)}</span>
+                  </ToolbarBtn>
+                  <ToolbarBtn
+                    title="Blockquote"
+                    active={editor.isActive('blockquote')}
+                    onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                  >
+                    <span className="text-[13px] leading-none">&ldquo;</span>
+                  </ToolbarBtn>
+                </div>
+              )}
 
               {/* Tags row */}
-              <div className="flex items-center flex-wrap gap-1.5 mb-3">
-                <Tag size={11} className="text-zinc-600 flex-shrink-0" />
+              <div className="flex items-center flex-wrap gap-1.5">
+                <Tag size={12} className="text-txt-muted flex-shrink-0" />
                 {activeNote.tags.map((tag) => (
                   <button
                     key={tag}
                     onClick={() => handleRemoveTag(tag)}
-                    className="group flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400/80 border border-amber-400/20 hover:bg-rose-400/10 hover:text-rose-400 hover:border-rose-400/20 transition-colors"
+                    className="
+                      group flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full
+                      bg-accent-amber/10 text-accent-amber border border-accent-amber/20
+                      hover:bg-accent-coral/10 hover:text-accent-coral hover:border-accent-coral/20
+                      transition-colors
+                    "
                     title="Click to remove"
                   >
                     {tag}
-                    <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[8px]">✕</span>
+                    <span className="opacity-0 group-hover:opacity-100 transition-opacity">✕</span>
                   </button>
                 ))}
                 {showTagInput ? (
@@ -507,69 +602,40 @@ const Notes: React.FC = () => {
                     onKeyDown={handleAddTag}
                     onBlur={() => { setShowTagInput(false); setTagInput(''); }}
                     placeholder="Tag name..."
-                    className="text-[10px] px-2 py-0.5 w-24 rounded-full bg-white/[0.06] border border-white/[0.12] text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-amber-400/40"
+                    className="
+                      text-[10px] px-2 py-0.5 w-24 rounded-full
+                      bg-bg-surface2 border border-white/10
+                      text-txt-primary placeholder:text-txt-muted
+                      outline-none focus:border-accent-amber/40
+                    "
                   />
                 ) : (
                   <button
                     onClick={() => setShowTagInput(true)}
-                    className="text-[10px] px-2 py-0.5 rounded-full border border-dashed border-white/[0.15] text-zinc-600 hover:border-amber-400/40 hover:text-amber-400 transition-colors"
+                    className="
+                      text-[10px] px-2 py-0.5 rounded-full
+                      border border-dashed border-white/20 text-txt-muted
+                      hover:border-accent-amber/40 hover:text-accent-amber
+                      transition-colors
+                    "
                   >
                     + tag
                   </button>
                 )}
               </div>
-
-              {/* Toolbar */}
-              {editor && (
-                <div className="flex items-center gap-0.5 pb-3 border-b border-white/[0.06] flex-wrap">
-                  <ToolbarBtn title="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
-                    <Bold size={13} />
-                  </ToolbarBtn>
-                  <ToolbarBtn title="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
-                    <Italic size={13} />
-                  </ToolbarBtn>
-                  <ToolbarBtn title="Inline Code" active={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()}>
-                    <Code size={13} />
-                  </ToolbarBtn>
-                  <div className="w-px h-3.5 bg-white/[0.08] mx-1 flex-shrink-0" />
-                  <ToolbarBtn title="Bullet List" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}>
-                    <List size={13} />
-                  </ToolbarBtn>
-                  <ToolbarBtn title="Task List" active={editor.isActive('taskList')} onClick={() => editor.chain().focus().toggleTaskList().run()}>
-                    <CheckSquare size={13} />
-                  </ToolbarBtn>
-                  <div className="w-px h-3.5 bg-white/[0.08] mx-1 flex-shrink-0" />
-                  <ToolbarBtn title="Heading 2" active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
-                    <span className="text-[10px] font-bold">H2</span>
-                  </ToolbarBtn>
-                  <ToolbarBtn title="Heading 3" active={editor.isActive('heading', { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
-                    <span className="text-[10px] font-bold">H3</span>
-                  </ToolbarBtn>
-                  <ToolbarBtn title="Highlight" active={editor.isActive('highlight')} onClick={() => editor.chain().focus().toggleHighlight().run()}>
-                    <span className="text-[10px] font-bold text-amber-400">H</span>
-                  </ToolbarBtn>
-                  <div className="w-px h-3.5 bg-white/[0.08] mx-1 flex-shrink-0" />
-                  <ToolbarBtn title="Code Block" active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()}>
-                    <span className="text-[9px] font-mono text-zinc-400">&lt;/&gt;</span>
-                  </ToolbarBtn>
-                  <ToolbarBtn title="Blockquote" active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
-                    <span className="text-[13px] leading-none text-zinc-400">&ldquo;</span>
-                  </ToolbarBtn>
-                </div>
-              )}
             </div>
 
-            {/* ── Editor body ──────────────────────────────────────────── */}
-            <div className="flex-1 overflow-y-auto px-8 py-5">
+            {/* ── Editor body ─────────────────────────────────────────── */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
               <EditorContent
                 editor={editor}
-                className="tiptap-editor flex-1 overflow-y-auto min-h-[300px] text-zinc-200 text-sm leading-relaxed"
+                className="tiptap-editor flex-1 overflow-y-auto min-h-[300px]"
               />
             </div>
 
-            {/* ── Status bar ────────────────────────────────────────────── */}
-            <div className="flex-shrink-0 flex items-center justify-between px-8 py-2 border-t border-white/[0.06] bg-white/[0.01]">
-              <span className="text-[10px] text-zinc-600">
+            {/* ── Status bar ──────────────────────────────────────────── */}
+            <div className="flex-shrink-0 flex items-center justify-between px-6 py-2 border-t border-white/[0.035] bg-[#0C0F14]">
+              <span className="text-[10px] text-txt-muted">
                 Last edited {formatDate(activeNote.updated_at)}
               </span>
               <AnimatePresence>
@@ -581,11 +647,11 @@ const Notes: React.FC = () => {
                     exit={{ opacity: 0 }}
                     className="flex items-center gap-1.5"
                   >
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-mint opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-mint" />
                     </span>
-                    <span className="text-[10px] text-emerald-400">Auto-saved</span>
+                    <span className="text-[10px] text-accent-mint">Auto-saved</span>
                   </motion.div>
                 )}
               </AnimatePresence>
