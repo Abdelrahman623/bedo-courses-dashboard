@@ -113,11 +113,15 @@ CREATE TABLE IF NOT EXISTS public.courses (
 );
 
 -- ── 2d. topics ────────────────────────────────────────────────────────────
+-- id is TEXT, not UUID: the roadmap canvas assigns its own human-readable
+-- ids (template slugs like "frontend", or "css-basics_a1b2" for topics added
+-- in-app), and Postgres rejects those as invalid input for a UUID column.
+-- The DEFAULT below is just a safety net for rows inserted without an id.
 CREATE TABLE IF NOT EXISTS public.topics (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
   course_id       UUID REFERENCES courses(id) ON DELETE CASCADE,
   title           TEXT NOT NULL,
-  parent_topic_id UUID REFERENCES topics(id) ON DELETE SET NULL,
+  parent_topic_id TEXT REFERENCES topics(id) ON DELETE SET NULL,
   position_x      FLOAT,
   position_y      FLOAT,
   phase           TEXT,
@@ -127,11 +131,17 @@ CREATE TABLE IF NOT EXISTS public.topics (
 );
 
 -- ── 2e. notes ─────────────────────────────────────────────────────────────
+-- note_type / project_id: the app's Note type has always expected these
+-- (used for linked notes — course, topic or project), but the original
+-- table never had them, so any linked note insert failed silently.
 CREATE TABLE IF NOT EXISTS public.notes (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id    TEXT NOT NULL DEFAULT 'local',
   course_id  UUID REFERENCES courses(id) ON DELETE SET NULL,
-  topic_id   UUID REFERENCES topics(id) ON DELETE SET NULL,
+  topic_id   TEXT REFERENCES topics(id) ON DELETE SET NULL,
+  project_id UUID,
+  note_type  TEXT NOT NULL DEFAULT 'general'
+               CHECK (note_type IN ('general','linked')),
   title      TEXT NOT NULL DEFAULT 'Untitled Note',
   content    TEXT NOT NULL DEFAULT '',
   tags       TEXT[] NOT NULL DEFAULT '{}',
@@ -166,7 +176,7 @@ CREATE TABLE IF NOT EXISTS public.sessions (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id       TEXT NOT NULL DEFAULT 'local',
   course_id     UUID REFERENCES courses(id) ON DELETE SET NULL,
-  topic_id      UUID REFERENCES topics(id) ON DELETE SET NULL,
+  topic_id      TEXT REFERENCES topics(id) ON DELETE SET NULL,
   start_time    TIMESTAMPTZ NOT NULL,
   end_time      TIMESTAMPTZ,
   duration_mins INTEGER NOT NULL DEFAULT 0,
@@ -201,6 +211,80 @@ COMMENT ON TABLE public.user_state IS
   'Per-account app state that has no table of its own. Keys in use: roadmap_canvas, notifications, preferences.';
 
 CREATE INDEX IF NOT EXISTS user_state_user_idx ON public.user_state (user_id);
+
+-- ── 2j. fix-ups for databases created before this file's topics/notes
+-- changes existed ─────────────────────────────────────────────────────────
+-- CREATE TABLE IF NOT EXISTS above only affects a brand-new database. If
+-- topics/notes/sessions were already created by an earlier version of this
+-- script (topics.id as UUID), this block converts them in place. Runs after
+-- every table in section 2 exists, and is safe to run again — each part
+-- checks the current state before doing anything.
+
+-- notes: add the missing columns if this table predates them.
+ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS project_id UUID;
+ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS note_type TEXT NOT NULL DEFAULT 'general';
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'notes_note_type_check' AND conrelid = 'public.notes'::regclass
+  ) THEN
+    ALTER TABLE public.notes ADD CONSTRAINT notes_note_type_check
+      CHECK (note_type IN ('general','linked'));
+  END IF;
+END$$;
+
+-- notes.project_id -> projects(id): added now that projects definitely exists.
+DO $$
+BEGIN
+  ALTER TABLE public.notes DROP CONSTRAINT IF EXISTS notes_project_id_fkey;
+  ALTER TABLE public.notes
+    ADD CONSTRAINT notes_project_id_fkey
+    FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE SET NULL;
+EXCEPTION
+  WHEN others THEN NULL;
+END$$;
+
+-- topics.id / topics.parent_topic_id / notes.topic_id / sessions.topic_id:
+-- convert UUID -> TEXT only if they're still UUID (older installs). The
+-- roadmap assigns its own ids ("frontend", "css-basics_a1b2", ...), which
+-- are not valid UUIDs, so every topic insert and every "link note to
+-- milestone" was failing before this ran.
+DO $$
+DECLARE
+  topics_id_is_uuid BOOLEAN;
+BEGIN
+  SELECT (data_type = 'uuid') INTO topics_id_is_uuid
+  FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = 'topics' AND column_name = 'id';
+
+  IF topics_id_is_uuid THEN
+    -- Drop every FK that points at topics(id) before changing its type.
+    ALTER TABLE public.topics DROP CONSTRAINT IF EXISTS topics_parent_topic_id_fkey;
+    ALTER TABLE public.notes  DROP CONSTRAINT IF EXISTS notes_topic_id_fkey;
+    ALTER TABLE public.sessions DROP CONSTRAINT IF EXISTS sessions_topic_id_fkey;
+
+    -- Old UUID rows (if any ever inserted successfully) still cast cleanly to text.
+    ALTER TABLE public.topics ALTER COLUMN id DROP DEFAULT;
+    ALTER TABLE public.topics ALTER COLUMN id TYPE TEXT USING id::text;
+    ALTER TABLE public.topics ALTER COLUMN id SET DEFAULT uuid_generate_v4()::text;
+
+    ALTER TABLE public.topics ALTER COLUMN parent_topic_id TYPE TEXT USING parent_topic_id::text;
+    ALTER TABLE public.notes  ALTER COLUMN topic_id TYPE TEXT USING topic_id::text;
+    ALTER TABLE public.sessions ALTER COLUMN topic_id TYPE TEXT USING topic_id::text;
+
+    -- Re-add the FKs now that both sides are TEXT.
+    ALTER TABLE public.topics
+      ADD CONSTRAINT topics_parent_topic_id_fkey
+      FOREIGN KEY (parent_topic_id) REFERENCES public.topics(id) ON DELETE SET NULL;
+    ALTER TABLE public.notes
+      ADD CONSTRAINT notes_topic_id_fkey
+      FOREIGN KEY (topic_id) REFERENCES public.topics(id) ON DELETE SET NULL;
+    ALTER TABLE public.sessions
+      ADD CONSTRAINT sessions_topic_id_fkey
+      FOREIGN KEY (topic_id) REFERENCES public.topics(id) ON DELETE SET NULL;
+  END IF;
+END$$;
 
 
 -- =============================================================================

@@ -73,11 +73,12 @@ VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_ANON_KEY=your-actual-anon-key-here
 ```
 
-### 3. Run Database Migration
+### 3. Run Database Setup
 1. In the Supabase Dashboard, navigate to the **SQL Editor**.
-2. Open [`supabase_migration.sql`](./supabase_migration.sql) from this repository.
+2. Open [`supabase_setup.sql`](./supabase_setup.sql) from this repository — it's the single file that sets up everything (tables, RLS, admin roles, user management). Safe to re-run any time.
 3. Paste the entire content into the SQL Editor and click **Run**.
-4. This will create all 8 tables with proper indexes, constraints, and Row Level Security (RLS) rules:
+4. Scroll to **section 10** and run the one `UPDATE` line with your own email — that's what makes your account an admin.
+5. This creates all 9 tables with proper indexes, constraints, and Row Level Security (RLS) rules:
    - `profiles`
    - `roadmaps`
    - `courses`
@@ -86,6 +87,7 @@ VITE_SUPABASE_ANON_KEY=your-actual-anon-key-here
    - `projects`
    - `sessions`
    - `daily_activity`
+   - `user_state`
 
 ### 4. Enable Google Sign-In (Optional)
 1. In the Supabase Dashboard, go to **Authentication → Providers → Google**.
@@ -150,7 +152,7 @@ Bedo_Courses_Dashboard/
 │   ├── index.css                  # Tailwind styles, CSS variables, & animations
 │   └── main.tsx                   # React 19 entry point
 ├── .env.example                   # Supabase environment variables template
-├── supabase_migration.sql         # Production PostgreSQL migration
+├── supabase_setup.sql              # Complete DB setup: tables, RLS, admin roles (single file)
 ├── tailwind.config.js             # Midnight Scholar design tokens
 └── vite.config.ts                 # Vite bundler configuration
 ```
