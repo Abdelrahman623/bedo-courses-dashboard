@@ -347,7 +347,7 @@ export const Home: React.FC = () => {
                 size="sm"
                 className="w-full justify-start text-xs font-medium text-zinc-300"
                 icon={<Plus size={14} className="text-accent-tertiary" />}
-                onClick={() => navigate('/projects')}
+                onClick={() => navigate('/projects?new=1')}
               >
                 Register New Project
               </Button>

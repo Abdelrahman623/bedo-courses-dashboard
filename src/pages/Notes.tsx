@@ -6,10 +6,11 @@ import Highlight from '@tiptap/extension-highlight';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, Tag, Trash2, FileText,
   Bold, Italic, Code, List, CheckSquare, Link2,
-  Check,
+  Check, X,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
@@ -59,6 +60,20 @@ const Notes: React.FC = () => {
 
   const { courses, topics, localNodes } = useRoadmapStore();
   const { projects } = useProjectsStore();
+
+  // Deep link from the Projects page: /notes?project=<id> scopes the list to
+  // one project, and &new=1 opens the composer already linked to it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const projectFilterId = searchParams.get('project');
+  const filterProject = projectFilterId
+    ? projects.find(p => p.id === projectFilterId) ?? null
+    : null;
+  const clearProjectFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('project');
+    next.delete('new');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const [saving, setSaving]       = useState(false);
   const [tagInput, setTagInput]   = useState('');
@@ -176,18 +191,40 @@ const Notes: React.FC = () => {
     const matchesType = noteTypeFilter === 'all'
       || (noteTypeFilter === 'general' && !linked)
       || (noteTypeFilter === 'linked' && linked);
-    return matchesSearch && matchesType;
+    const matchesProject = !projectFilterId || n.project_id === projectFilterId;
+    return matchesSearch && matchesType && matchesProject;
   });
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleNewNote = useCallback(() => {
     setNewNoteTitle('');
-    setNewNoteType('general');
-    setNewNoteLinkType('course');
-    setNewNoteLinkedId('');
+    // Arriving from a project card, the obvious note to write is one attached
+    // to that project — so the composer opens pre-linked instead of blank.
+    setNewNoteType(projectFilterId ? 'linked' : 'general');
+    setNewNoteLinkType(projectFilterId ? 'project' : 'course');
+    setNewNoteLinkedId(projectFilterId ?? '');
     setCreateNoteError(null);
     setShowNewModal(true);
-  }, []);
+  }, [projectFilterId]);
+
+  // ?new=1 (sent by a project with no notes yet) opens the composer once, then
+  // drops the flag so a refresh doesn't reopen it.
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    handleNewNote();
+    const next = new URLSearchParams(searchParams);
+    next.delete('new');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, handleNewNote]);
+
+  // While the list is scoped to a project, the note open in the editor has to
+  // belong to that project — otherwise the sidebar and the editor disagree.
+  useEffect(() => {
+    if (!projectFilterId) return;
+    if (activeNote?.project_id === projectFilterId) return;
+    const target = notes.find(n => n.project_id === projectFilterId) ?? null;
+    if (target?.id !== activeNote?.id) setActiveNote(target);
+  }, [projectFilterId, notes, activeNote, setActiveNote]);
 
   const handleCreateNote = useCallback(async () => {
     // Guards against a fast double-click firing two inserts before the first
@@ -288,6 +325,27 @@ const Notes: React.FC = () => {
       {/* ── LEFT SIDEBAR ─────────────────────────────────────────────────── */}
       <div className="w-64 flex-shrink-0 border-r border-white/[0.035] flex flex-col bg-[#11151D]">
 
+        {/* Scoped-to-a-project banner */}
+        {projectFilterId && (
+          <div className="px-3 pt-3">
+            <div className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg bg-accent-amber/10 border border-accent-amber/25">
+              <div className="min-w-0">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-accent-amber/80">Project</p>
+                <p className="text-[11px] font-medium text-accent-amber truncate">
+                  {filterProject?.title ?? 'Unknown project'}
+                </p>
+              </div>
+              <button
+                onClick={clearProjectFilter}
+                title="Show all notes"
+                className="p-1 rounded text-accent-amber/70 hover:text-accent-amber hover:bg-accent-amber/10 transition-colors cursor-pointer flex-shrink-0"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Search */}
         <div className="p-3 bg-[#11151D]">
           <div className="relative">
@@ -350,7 +408,11 @@ const Notes: React.FC = () => {
           )}
           {!loading && filtered.length === 0 && (
             <p className="text-xs text-txt-muted text-center mt-6 px-4">
-              {searchQuery ? 'No notes match your search.' : 'No notes yet.'}
+              {searchQuery
+                ? 'No notes match your search.'
+                : projectFilterId
+                  ? 'No notes for this project yet.'
+                  : 'No notes yet.'}
             </p>
           )}
           <AnimatePresence initial={false}>

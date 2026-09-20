@@ -219,3 +219,37 @@ body {
   background-color: rgb(var(--c-primary));
   background-image: linear-gradient(180deg, rgb(var(--c-primary-light)) 0%, rgb(var(--c-primary)) 100%);
 }
+
+/* ── Projects: inline completion slider ──────────────────────────────────────
+   The fill colour is set per-card via an inline `background` gradient (it
+   follows the project's status colour), so this rule only handles the shape
+   and the thumb. */
+.project-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+.project-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.project-range::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.project-range::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+.project-range:disabled { cursor: not-allowed; }

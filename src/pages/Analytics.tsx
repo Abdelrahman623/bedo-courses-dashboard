@@ -4,9 +4,12 @@ import {
   CartesianGrid, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, Cell,
 } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import { ArrowUpRight } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { useSessionStore } from '../store/sessionStore';
 import { useRoadmapStore } from '../store/roadmapStore';
+import { useProjectsStore } from '../store/projectsStore';
 import { minsToHHMM, pct, getAccentColor } from '../lib/utils';
 import { getThemeColors } from '../lib/themes';
 
@@ -47,10 +50,16 @@ function buildVelocityData(nodes: { completedAt?: string }[]) {
 export const Analytics: React.FC = () => {
   const { sessions, currentStreak, longestStreak, fetchSessions } = useSessionStore();
   const { localNodes } = useRoadmapStore();
+  const { projects, fetchProjects } = useProjectsStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
 
   // Live accent color — reads CSS variable so theme changes apply to charts
   const accent = getAccentColor();
@@ -78,14 +87,68 @@ export const Analytics: React.FC = () => {
     });
   }, [localNodes]);
 
-  // Estimated completion
-  const recentTopics = velocityData.slice(-4).reduce((s, w) => s + w.topics, 0);
-  const weeklyPace = recentTopics / 4;
-  const remaining = totalTopics - completedTopics;
-  const weeksLeft = weeklyPace > 0 ? Math.ceil(remaining / weeklyPace) : null;
-  const completionDate = weeksLeft
-    ? new Date(Date.now() + weeksLeft * 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-    : null;
+  // ── Estimated completion ────────────────────────────────────────────────
+  // Strictly a *curriculum* projection: it answers "when will the roadmap
+  // topics be finished", so it moves when a topic is marked complete on the
+  // roadmap — not when a study session is logged, and not when a portfolio
+  // project progresses. Those are tracked separately below and in Tracker.
+  const projection = useMemo(() => {
+    const stamps = localNodes
+      .map(n => n.completedAt)
+      .filter((t): t is string => Boolean(t))
+      .map(t => Date.parse(t))
+      .filter(t => !Number.isNaN(t))
+      .sort((a, b) => a - b);
+
+    const now = Date.now();
+    const WEEK = 7 * 24 * 60 * 60 * 1000;
+    const recent = stamps.filter(t => now - t <= 4 * WEEK).length;
+    const remaining = Math.max(0, totalTopics - completedTopics);
+
+    // Dividing by a flat 4 weeks understates the pace of someone who only
+    // started tracking days ago, so the window is however much history
+    // actually exists, capped at 4 weeks and floored at 1.
+    const weeksTracked = stamps.length
+      ? Math.min(4, Math.max(1, (now - stamps[0]) / WEEK))
+      : 0;
+    const weeklyPace = recent > 0 ? recent / weeksTracked : 0;
+
+    if (totalTopics === 0) {
+      return { weeklyPace: 0, weeksLeft: null, headline: 'No roadmap yet', hint: 'Load a roadmap to project a finish date' };
+    }
+    if (remaining === 0) {
+      return { weeklyPace, weeksLeft: null, headline: 'Complete', hint: 'Every roadmap topic is done' };
+    }
+    if (stamps.length === 0) {
+      return { weeklyPace: 0, weeksLeft: null, headline: 'Calculating...', hint: 'Mark a roadmap topic complete to calculate' };
+    }
+    if (recent === 0) {
+      return { weeklyPace: 0, weeksLeft: null, headline: 'Paused', hint: 'No topics completed in the last 4 weeks' };
+    }
+
+    const weeksLeft = Math.ceil(remaining / weeklyPace);
+    const headline = new Date(now + weeksLeft * WEEK)
+      .toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return {
+      weeklyPace,
+      weeksLeft,
+      headline,
+      hint: `~${weeksLeft} weeks at ${weeklyPace.toFixed(1)} topics/wk`,
+    };
+  }, [localNodes, totalTopics, completedTopics]);
+
+  const weeklyPace = projection.weeklyPace;
+
+  // Portfolio roll-up — projects are their own track, summarised here so the
+  // work shows up on the analytics page instead of living only on /projects.
+  const portfolio = useMemo(() => {
+    const shipped = projects.filter(p => p.status === 'deployed' || p.status === 'completed').length;
+    const active = projects.filter(p => p.status === 'in_progress').length;
+    const avg = projects.length
+      ? Math.round(projects.reduce((s, p) => s + p.completion_pct, 0) / projects.length)
+      : 0;
+    return { total: projects.length, shipped, active, avg };
+  }, [projects]);
 
   // Sessions by day of week
   const dayOfWeekData = useMemo(() => {
@@ -148,16 +211,56 @@ export const Analytics: React.FC = () => {
           <div className="p-4">
             <span className="text-xs text-zinc-400 font-medium">Projected Completion</span>
             <div className="my-2 flex items-baseline gap-1.5">
-              <span className="text-lg font-bold font-mono text-accent-tertiary truncate">
-                {completionDate || 'Calculating...'}
+              <span className="text-lg font-bold font-mono text-accent-tertiary truncate" title={projection.headline}>
+                {projection.headline}
               </span>
             </div>
             <span className="text-[11px] text-zinc-500 block">
-              {weeksLeft ? `~${weeksLeft} weeks at current pace` : 'Log sessions to calculate'}
+              {projection.hint}
             </span>
           </div>
         </div>
       </div>
+
+      {/* ── Portfolio roll-up ──────────────────────────────────────── */}
+      {/* Projects are a separate track from the curriculum: finishing a
+          project doesn't move "Curriculum Covered" or the projected finish
+          date (those count roadmap topics), so portfolio progress is
+          surfaced on its own line rather than silently folded in. */}
+      <button
+        onClick={() => navigate('/projects')}
+        className="w-full text-left bg-[#131722] border border-white/[0.08] hover:border-white/[0.16] rounded-xl p-4 transition-colors cursor-pointer group shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]"
+      >
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <span className="text-xs text-zinc-400 font-medium">Portfolio Progress</span>
+            <p className="text-[11px] text-zinc-500 mt-0.5">
+              Tracked separately from curriculum topics
+            </p>
+          </div>
+          <div className="flex items-center gap-5">
+            <div className="text-right">
+              <p className="text-lg font-bold font-mono text-white tabular-nums">{portfolio.avg}%</p>
+              <p className="text-[10px] text-zinc-500">avg completion</p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold font-mono text-accent-secondary tabular-nums">{portfolio.active}</p>
+              <p className="text-[10px] text-zinc-500">in flight</p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold font-mono text-accent-tertiary tabular-nums">{portfolio.shipped}</p>
+              <p className="text-[10px] text-zinc-500">finished</p>
+            </div>
+            <ArrowUpRight size={15} className="text-zinc-500 group-hover:text-white transition-colors" />
+          </div>
+        </div>
+        <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden mt-3">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${portfolio.avg}%`, background: accent }}
+          />
+        </div>
+      </button>
 
       {/* ── Chart 1: Learning Velocity Over Time ───────────────────── */}
       <Card hover={false} padding="p-5">
