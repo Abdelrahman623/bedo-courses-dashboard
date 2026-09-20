@@ -23,8 +23,13 @@ const chartStyle = {
   tickFill: '#A1A1AA',
 };
 
-function buildVelocityData(activity: { date: string; topics_completed: number }[]) {
-  const actMap = Object.fromEntries(activity.map(a => [a.date, a.topics_completed]));
+function buildVelocityData(nodes: { completedAt?: string }[]) {
+  const dayCounts: Record<string, number> = {};
+  for (const n of nodes) {
+    if (!n.completedAt) continue;
+    const iso = n.completedAt.split('T')[0];
+    dayCounts[iso] = (dayCounts[iso] || 0) + 1;
+  }
   return Array.from({ length: 12 }, (_, wi) => {
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - (11 - wi) * 7);
@@ -33,14 +38,14 @@ function buildVelocityData(activity: { date: string; topics_completed: number }[
       const day = new Date(weekStart);
       day.setDate(weekStart.getDate() + d);
       const iso = day.toISOString().split('T')[0];
-      total += actMap[iso] || 0;
+      total += dayCounts[iso] || 0;
     }
     return { week: `W${wi + 1}`, topics: total };
   });
 }
 
 export const Analytics: React.FC = () => {
-  const { sessions, activity, currentStreak, longestStreak, fetchSessions } = useSessionStore();
+  const { sessions, currentStreak, longestStreak, fetchSessions } = useSessionStore();
   const { localNodes } = useRoadmapStore();
 
   useEffect(() => {
@@ -56,7 +61,12 @@ export const Analytics: React.FC = () => {
   const overallPct = pct(completedTopics, totalTopics);
   const totalMins = sessions.reduce((s, sess) => s + (sess.duration_mins || 0), 0);
 
-  const velocityData = useMemo(() => buildVelocityData(activity), [activity]);
+  // Driven by each topic's `completedAt` timestamp, not session time —
+  // finishing a topic and logging study time are different events, and
+  // conflating them (as this used to, via the session-derived `activity`
+  // list) is why this chart, the pace figure and the projected-completion
+  // date below were always stuck at zero regardless of actual progress.
+  const velocityData = useMemo(() => buildVelocityData(localNodes), [localNodes]);
 
   // Radar: % complete per phase
   const radarData = useMemo(() => {

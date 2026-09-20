@@ -225,28 +225,42 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   computeStreaks: () => {
     const { activity } = get();
     const daySet = new Set(activity.filter(a => a.total_mins > 0).map(a => a.date));
-    let current = 0, longest = 0, streak = 0;
     const today = new Date();
-
-    for (let i = 0; i < 365; i++) {
+    const isoDaysAgo = (n: number) => {
       const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const iso = d.toISOString().split('T')[0];
-      if (daySet.has(iso)) {
-        streak++;
-        if (i <= 1) current = streak;
-        if (streak > longest) longest = streak;
+      d.setDate(today.getDate() - n);
+      return d.toISOString().split('T')[0];
+    };
+
+    // Longest streak: the longest run of consecutive logged days in the
+    // last year, wherever it falls.
+    let longest = 0;
+    let run = 0;
+    for (let i = 0; i < 365; i++) {
+      if (daySet.has(isoDaysAgo(i))) {
+        run++;
+        if (run > longest) longest = run;
       } else {
-        if (i <= 1) current = 0;
-        streak = 0;
+        run = 0;
       }
     }
 
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - 6);
-    const weekIso = weekStart.toISOString().split('T')[0];
+    // Current streak: consecutive logged days counting back from today.
+    // Today not having a session logged yet doesn't break an otherwise
+    // unbroken streak — the day isn't over — so the walk starts at
+    // yesterday in that case instead of resetting straight to zero.
+    // (The previous version only ever set `current` while i <= 1, so any
+    // streak longer than two days reported the wrong, much lower, number.)
+    const startOffset = daySet.has(isoDaysAgo(0)) ? 0 : 1;
+    let current = 0;
+    for (let i = startOffset; i < 365; i++) {
+      if (!daySet.has(isoDaysAgo(i))) break;
+      current++;
+    }
+    if (current > longest) longest = current;
+
     const weekMins = activity
-      .filter(a => a.date >= weekIso)
+      .filter(a => a.date >= isoDaysAgo(6))
       .reduce((s, a) => s + (a.total_mins || 0), 0);
 
     set({ currentStreak: current, longestStreak: longest, weeklyMins: weekMins });

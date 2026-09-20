@@ -129,6 +129,10 @@ export interface RoadmapNode {
   x?: number;
   y?: number;
   children?: string[]; // ids
+  /** ISO timestamp of the moment `status` last became 'completed'. Set by
+   *  roadmapStore.setLocalTopicStatus; drives Analytics' curriculum
+   *  velocity chart. Undefined for nodes that have never been completed. */
+  completedAt?: string;
 }
 
 export interface RoadmapEdge {

@@ -11,6 +11,7 @@ import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { useSessionStore, type TimerMode } from '../store/sessionStore';
 import { useRoadmapStore } from '../store/roadmapStore';
+import { useAuth } from '../hooks/useAuth';
 import { hhmm, minsToHHMM, getAccentColor } from '../lib/utils';
 import { getThemeColors } from '../lib/themes';
 
@@ -38,6 +39,7 @@ export const Tracker: React.FC = () => {
   } = useSessionStore();
 
   const { localNodes } = useRoadmapStore();
+  const { profile } = useAuth();
 
   const [selectedTopic, setSelectedTopic] = useState<string>(() => {
     const inProg = localNodes.find(n => n.status === 'in_progress');
@@ -55,7 +57,7 @@ export const Tracker: React.FC = () => {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ notes: '', duration_mins: 25 });
 
-  const weekGoal = 10; // hours
+  const weekGoal = profile?.weekly_goal_hours ?? 10; // hours — same account setting as Home & the top bar
   const weeklyHours = +(weeklyMins / 60).toFixed(1);
   const goalPct = Math.min(Math.round((weeklyHours / weekGoal) * 100), 100);
   const chartData = getLast7Days(activity);

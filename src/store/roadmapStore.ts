@@ -156,7 +156,22 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   },
 
   setLocalTopicStatus: (id, status) => {
-    set({ localNodes: get().localNodes.map(n => (n.id === id ? { ...n, status } : n)) });
+    set({
+      localNodes: get().localNodes.map(n => {
+        if (n.id !== id) return n;
+        // Stamp (or clear) completedAt on the transition itself, not just
+        // whenever status happens to be 'completed' — that's what lets
+        // Analytics count *when* a topic was finished, for the velocity
+        // chart, instead of only how many are finished right now.
+        if (status === 'completed' && n.status !== 'completed') {
+          return { ...n, status, completedAt: new Date().toISOString() };
+        }
+        if (status !== 'completed' && n.status === 'completed') {
+          return { ...n, status, completedAt: undefined };
+        }
+        return { ...n, status };
+      }),
+    });
 
     // Keep the `topics` list (used for notes-linking and course lookups) in
     // step with the canvas rather than letting the two drift apart.
@@ -338,7 +353,7 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   },
 
   resetLocalRoadmap: () => {
-    set({ localNodes: get().localNodes.map(n => ({ ...n, status: 'not_started' as TopicStatus })) });
+    set({ localNodes: get().localNodes.map(n => ({ ...n, status: 'not_started' as TopicStatus, completedAt: undefined })) });
     get().persistCanvas();
   },
 
