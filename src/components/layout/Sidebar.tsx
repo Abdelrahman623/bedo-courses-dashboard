@@ -3,8 +3,9 @@ import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import {
   LayoutGrid, GitFork, BookOpen, FileEdit,
   FolderKanban, Activity, BarChart2,
-  Settings, ChevronLeft,
+  Settings, ChevronLeft, X,
 } from 'lucide-react';
+import { useUIStore } from '../../store/uiStore';
 
 interface NavItem {
   id: string;
@@ -71,6 +72,12 @@ export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const mobileOpen = useUIStore(s => s.mobileSidebarOpen);
+  const closeMobile = useUIStore(s => s.closeMobileSidebar);
+
+  // Below `lg`, the sidebar is an off-canvas drawer, so any navigation
+  // (a nav item, or Settings) should close it behind you.
+  const handleNavigate = () => closeMobile();
 
   // Check active state accurately accounting for query parameters
   const isItemActive = (item: NavItem) => {
@@ -102,34 +109,61 @@ export const Sidebar: React.FC = () => {
   const isSettingsActive = location.pathname.startsWith('/settings');
 
   return (
-    <aside
-      style={{ width: collapsed ? 64 : 220 }}
-      className="h-full flex-shrink-0 bg-gradient-to-b from-[#111A24] via-[#0D141C] to-[#080B10] border-r border-white/[0.08] flex flex-col overflow-hidden relative z-10 transition-all duration-200 ease-out select-none"
-    >
-      {/* Brand Header */}
-      <div className="flex items-center gap-3 px-4 h-[56px] flex-shrink-0">
+    <>
+      {/* Backdrop — phone/tablet only, shown while the drawer is open */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[1px] lg:hidden"
+          onClick={closeMobile}
+          aria-hidden="true"
+        />
+      )}
 
-        {/* Logo */}
-        <div className="brand-logo-glow relative flex items-center justify-center w-9 h-9 rounded-[10px] bg-[#081722] border flex-shrink-0 overflow-hidden">
-          <img
-            src="/nl-logo.png"
-            alt="Noname Learn"
-            className="w-7 h-7 object-contain"
-          />
-        </div>
-        {/* Brand Name */}
-        {!collapsed && (
-          <div className="flex items-center gap-1 whitespace-nowrap min-w-0">
-            <span className="font-bold text-[18px] leading-none tracking-tight text-white">
-              Noname
-            </span>
+      <aside
+        className={[
+          // Off-canvas drawer below `lg`; static in-flow column at `lg` and up.
+          'fixed inset-y-0 left-0 z-50 h-full flex flex-col overflow-hidden',
+          'bg-gradient-to-b from-[#111A24] via-[#0D141C] to-[#080B10] border-r border-white/[0.08]',
+          'transition-transform duration-200 ease-out select-none',
+          'w-[240px]',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          'lg:static lg:translate-x-0 lg:z-10 lg:flex-shrink-0 lg:transition-[width] lg:duration-200',
+          collapsed ? 'lg:w-16' : 'lg:w-[220px]',
+        ].join(' ')}
+      >
+        {/* Brand Header */}
+        <div className="flex items-center gap-3 px-4 h-[56px] flex-shrink-0">
 
-            <span className="text-accent-secondary text-[18px] leading-none font-semibold tracking-tight">
-              learn
-            </span>
+          {/* Logo */}
+          <div className="brand-logo-glow relative flex items-center justify-center w-9 h-9 rounded-[10px] bg-[#081722] border flex-shrink-0 overflow-hidden">
+            <img
+              src="/nl-logo.png"
+              alt="Noname Learn"
+              className="w-7 h-7 object-contain"
+            />
           </div>
-        )}
-      </div>
+          {/* Brand Name */}
+          {!collapsed && (
+            <div className="flex items-center gap-1 whitespace-nowrap min-w-0 flex-1">
+              <span className="font-bold text-[18px] leading-none tracking-tight text-white">
+                Noname
+              </span>
+
+              <span className="text-accent-secondary text-[18px] leading-none font-semibold tracking-tight">
+                learn
+              </span>
+            </div>
+          )}
+
+          {/* Close drawer — phone/tablet only */}
+          <button
+            onClick={closeMobile}
+            className="ml-auto flex-shrink-0 p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors cursor-pointer lg:hidden"
+            aria-label="Close menu"
+          >
+            <X size={16} />
+          </button>
+        </div>
 
       {/* Grouped Navigation */}
       <nav className="flex-1 py-3 overflow-y-auto px-3 space-y-4 scrollbar-none">
@@ -149,7 +183,7 @@ export const Sidebar: React.FC = () => {
                 const active = isItemActive(item);
 
                 return (
-                  <NavLink key={item.id} to={item.to} className="outline-none block">
+                  <NavLink key={item.id} to={item.to} onClick={handleNavigate} className="outline-none block">
                     <div
                       className={[
                         'flex items-center gap-3 px-3 py-2 rounded-xl text-xs transition-all duration-150 relative group',
@@ -190,7 +224,7 @@ export const Sidebar: React.FC = () => {
         {/* Divider before Settings */}
         <div className="pt-1">
           <div className="my-1" />
-          <NavLink to="/settings" className="outline-none block">
+          <NavLink to="/settings" onClick={handleNavigate} className="outline-none block">
             <div
               className={[
                 'flex items-center gap-3 px-3 py-2 rounded-xl text-xs transition-all duration-150 relative group',
@@ -216,8 +250,8 @@ export const Sidebar: React.FC = () => {
         </div>
       </nav>
 
-      {/* Footer Collapse Toggle */}
-      <div className="p-2 flex items-center justify-center">
+      {/* Footer Collapse Toggle — desktop rail only; the drawer below `lg` always shows full labels */}
+      <div className="hidden lg:flex p-2 items-center justify-center">
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="flex items-center justify-center p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors cursor-pointer"
@@ -230,6 +264,7 @@ export const Sidebar: React.FC = () => {
           />
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };

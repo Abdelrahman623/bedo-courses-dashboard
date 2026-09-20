@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, LogOut, Sparkles, Flame, Target, Compass, FileText, CheckCheck, X } from 'lucide-react';
+import { Bell, LogOut, Sparkles, Flame, Target, Compass, FileText, CheckCheck, X, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
 import { useSessionStore } from '../../store/sessionStore';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import { useNotesStore } from '../../store/notesStore';
+import { useUIStore } from '../../store/uiStore';
 import { loadUserState, queueUserState } from '../../lib/userState';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -36,6 +37,7 @@ export const TopBar: React.FC = () => {
   const { currentStreak, weeklyMins } = useSessionStore();
   const { localNodes } = useRoadmapStore();
   const { notes } = useNotesStore();
+  const toggleMobileSidebar = useUIStore(s => s.toggleMobileSidebar);
 
   const [showMenu, setShowMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -217,16 +219,26 @@ export const TopBar: React.FC = () => {
   };
 
   return (
-    <header className="h-[56px] flex-shrink-0 bg-[#0A0D14]/90 backdrop-blur-md flex items-center px-6 gap-4 sticky top-0 z-20">
+    <header className="h-[56px] flex-shrink-0 bg-[#0A0D14]/90 backdrop-blur-md flex items-center px-3 sm:px-4 lg:px-6 gap-2 sm:gap-4 sticky top-0 z-20">
+      {/* Hamburger — opens the sidebar drawer below `lg` */}
+      <button
+        type="button"
+        onClick={toggleMobileSidebar}
+        className="flex-shrink-0 p-2 -ml-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer lg:hidden"
+        aria-label="Open menu"
+      >
+        <Menu size={18} />
+      </button>
+
       {/* Title + Breadcrumb */}
-      <div className="flex-1 flex items-center gap-2">
-        <h1 className="font-semibold text-white text-sm tracking-tight">{title}</h1>
-        <span className="text-zinc-600 text-xs">/</span>
-        <span className="text-xs font-mono text-zinc-400">{dateStr}</span>
+      <div className="flex-1 flex items-center gap-2 min-w-0">
+        <h1 className="font-semibold text-white text-sm tracking-tight truncate">{title}</h1>
+        <span className="hidden sm:inline text-zinc-600 text-xs">/</span>
+        <span className="hidden sm:inline text-xs font-mono text-zinc-400 whitespace-nowrap">{dateStr}</span>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
         {/* Notifications Center */}
         <div className="relative">
           <button
@@ -261,7 +273,7 @@ export const TopBar: React.FC = () => {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.96, y: -4 }}
                   transition={{ duration: 0.12, ease: 'easeOut' }}
-                  className="absolute right-0 top-10 w-80 sm:w-96 bg-[#131722] border border-white/[0.10] rounded-2xl shadow-2xl overflow-hidden z-50 flex flex-col divide-y divide-white/[0.06]"
+                  className="absolute right-0 top-10 w-80 sm:w-96 max-w-[calc(100vw-1.5rem)] bg-[#131722] border border-white/[0.10] rounded-2xl shadow-2xl overflow-hidden z-50 flex flex-col divide-y divide-white/[0.06]"
                 >
                   {/* Notifications Header */}
                   <div className="p-3.5 flex items-center justify-between bg-[#161B28]">
