@@ -100,10 +100,15 @@ CREATE TABLE IF NOT EXISTS public.roadmaps (
 );
 
 -- ── 2c. courses ───────────────────────────────────────────────────────────
+-- roadmap_id is TEXT, not a real FK: the app stamps it with the frontend
+-- template's own string key ("data-analyst", "full-stack", ...) to remember
+-- which built-in roadmap a course came from — it was never meant to point
+-- at a row in the (effectively unused) `roadmaps` table, which only has
+-- real UUID ids. Typing it as UUID made every template enrollment fail.
 CREATE TABLE IF NOT EXISTS public.courses (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id     TEXT NOT NULL DEFAULT 'local',
-  roadmap_id  UUID REFERENCES public.roadmaps(id) ON DELETE SET NULL,
+  roadmap_id  TEXT,
   title       TEXT NOT NULL,
   source_url  TEXT,
   start_date  DATE,
@@ -219,6 +224,25 @@ CREATE INDEX IF NOT EXISTS user_state_user_idx ON public.user_state (user_id);
 -- script (topics.id as UUID), this block converts them in place. Runs after
 -- every table in section 2 exists, and is safe to run again — each part
 -- checks the current state before doing anything.
+
+-- courses.roadmap_id: convert UUID -> TEXT only if still UUID (older
+-- installs). Every template enrollment (addTemplateAsCourse) has always
+-- tried to store a template key like "data-analyst" here, which is not a
+-- valid UUID — this is why courses created from a template never actually
+-- saved, even though the app appeared to accept them locally.
+DO $$
+DECLARE
+  roadmap_id_is_uuid BOOLEAN;
+BEGIN
+  SELECT (data_type = 'uuid') INTO roadmap_id_is_uuid
+  FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = 'courses' AND column_name = 'roadmap_id';
+
+  IF roadmap_id_is_uuid THEN
+    ALTER TABLE public.courses DROP CONSTRAINT IF EXISTS courses_roadmap_id_fkey;
+    ALTER TABLE public.courses ALTER COLUMN roadmap_id TYPE TEXT USING roadmap_id::text;
+  END IF;
+END$$;
 
 -- notes: add the missing columns if this table predates them.
 ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS project_id UUID;

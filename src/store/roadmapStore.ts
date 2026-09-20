@@ -416,12 +416,22 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       created_at: now,
     }));
 
-    set({ courses: [newCourse, ...get().courses], topics: [...get().topics, ...newTopics] });
+    const previousCourses = get().courses;
+    const previousTopics = get().topics;
+    set({ courses: [newCourse, ...previousCourses], topics: [...previousTopics, ...newTopics] });
 
     const { error: courseErr } = await supabase.from('courses').insert(newCourse);
     if (courseErr) {
-      console.warn('[RoadmapStore] Course insert failed:', courseErr.message);
-    } else if (newTopics.length > 0) {
+      // Roll back — an unsynced course left in local state is exactly what
+      // caused confusing downstream errors (e.g. linking a note to a course
+      // that doesn't actually exist yet, failing with a foreign-key error
+      // instead of this one).
+      console.warn('[RoadmapStore] Course insert failed, rolling back:', courseErr.message);
+      set({ courses: previousCourses, topics: previousTopics });
+      throw new Error(`Could not enroll "${tpl.name}": ${courseErr.message}`);
+    }
+
+    if (newTopics.length > 0) {
       const { error: topicErr } = await supabase.from('topics').insert(newTopics);
       if (topicErr) console.warn('[RoadmapStore] Topics insert failed:', topicErr.message);
     }
