@@ -289,6 +289,7 @@ export const Courses: React.FC = () => {
         note_type: 'linked',
         tags: ['course-notes'],
       });
+      if (!newNote) return; // save failed — stay put rather than opening an empty editor
       setNewNoteTitleInput('');
       setActiveNote(newNote);
       navigate('/notes');
@@ -324,7 +325,6 @@ export const Courses: React.FC = () => {
     if (!courseForm.title.trim()) return;
     setSaving(true);
     await addCourse({
-      user_id: 'local',
       title: courseForm.title.trim(),
       source_url: courseForm.source_url.trim() || undefined,
       start_date: courseForm.start_date,
@@ -611,14 +611,14 @@ export const Courses: React.FC = () => {
 
       {/* ── Add Topic Notification Banner ──────────────────────────────────── */}
       {addedTopicNotice && (
-        <div className="bg-cyan-500/10 px-6 py-2 flex items-center justify-between text-xs text-cyan-300 animate-fadeIn flex-shrink-0">
+        <div className="bg-accent-tertiary/10 px-6 py-2 flex items-center justify-between text-xs text-accent-tertiary animate-fadeIn flex-shrink-0">
           <div className="flex items-center gap-2">
-            <CheckCircle2 size={14} className="text-cyan-400" />
+            <CheckCircle2 size={14} className="text-accent-tertiary" />
             <span className="font-medium">{addedTopicNotice}</span>
           </div>
           <button
             onClick={() => setAddedTopicNotice(null)}
-            className="text-cyan-400 hover:text-white text-xs font-bold cursor-pointer px-1"
+            className="text-accent-tertiary hover:text-white text-xs font-bold cursor-pointer px-1"
             aria-label="Dismiss"
           >
             ✕
@@ -711,7 +711,7 @@ export const Courses: React.FC = () => {
                             loadTemplate(tpl.id);
                             setActiveView('roadmap');
                           }}
-                          className="p-3 rounded-xl bg-white/[0.04] hover:bg-accent-amber/10 border border-white/8 hover:border-accent-amber/30 text-left transition-all cursor-pointer group"
+                          className="p-3 rounded-xl bg-white/[0.04] hover:bg-accent-amber/10 border border-white/[0.08] hover:border-accent-amber/30 text-left transition-all cursor-pointer group"
                         >
                           <div className="text-xs font-semibold text-white group-hover:text-accent-amber transition-colors">
                             {tpl.label}
@@ -724,14 +724,14 @@ export const Courses: React.FC = () => {
                     <div className="pt-2 flex items-center gap-3 flex-wrap">
                       <button
                         onClick={() => setShowTemplateModal(true)}
-                        className="px-4 py-2 rounded-xl text-xs font-semibold bg-accent-amber hover:bg-amber-400 text-[#090D14] transition-all flex items-center gap-1.5 cursor-pointer shadow-md font-mono"
+                        className="px-4 py-2 rounded-xl text-xs font-semibold bg-accent-amber hover:brightness-110 text-[#090D14] transition-all flex items-center gap-1.5 cursor-pointer shadow-md font-mono"
                       >
                         <Sparkles size={14} />
                         <span>Browse All Roadmaps</span>
                       </button>
                       <button
                         onClick={() => setShowCourseModal(true)}
-                        className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/8 transition-colors flex items-center gap-1.5 cursor-pointer"
+                        className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] transition-colors flex items-center gap-1.5 cursor-pointer"
                       >
                         <Plus size={13} />
                         <span>Add Custom Course</span>
@@ -748,15 +748,15 @@ export const Courses: React.FC = () => {
                     <div className="flex-1 min-w-0 space-y-3.5">
                       {/* Status & Path Type */}
                       <div className="flex items-center gap-2.5 flex-wrap">
-                        <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-accent-amber/10 text-accent-amber border border-accent-amber/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent-amber animate-pulse" />
                           In Progress
                         </span>
                         <span className="text-xs text-zinc-400 font-medium">
                           Primary Path
                         </span>
                         {activeTemplate && (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.04] text-zinc-400 border border-white/6">
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.04] text-zinc-400 border border-white/[0.06]">
                             {activeTemplate.badge}
                           </span>
                         )}
@@ -784,7 +784,7 @@ export const Courses: React.FC = () => {
                         {/* Progress Bar */}
                         <div className="w-full h-2 bg-[#171C28] rounded-full overflow-hidden border border-white/[0.04]">
                           <motion.div
-                            className="h-full bg-gradient-to-r from-accent-amber to-amber-400 rounded-full"
+                            className="h-full bg-gradient-to-r from-accent-amber to-accent-amber-light rounded-full"
                             initial={{ width: 0 }}
                             animate={{ width: `${pct(completedTopics, totalTopics)}%` }}
                             transition={{ duration: 1, ease: 'easeOut' }}
@@ -798,7 +798,7 @@ export const Courses: React.FC = () => {
                           </span>
                           <span>•</span>
                           <span>
-                            <strong className="text-amber-400 font-semibold font-mono">{inProgressTopics}</strong> in progress
+                            <strong className="text-accent-amber font-semibold font-mono">{inProgressTopics}</strong> in progress
                           </span>
                           <span>•</span>
                           <span>
@@ -815,7 +815,7 @@ export const Courses: React.FC = () => {
                       <div className="pt-2 flex items-center gap-3 flex-wrap">
                         <button
                           onClick={() => setActiveView('roadmap')}
-                          className="px-4 py-2 rounded-xl text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-[#090D14] transition-all flex items-center gap-1.5 cursor-pointer shadow-md font-mono"
+                          className="px-4 py-2 rounded-xl text-xs font-semibold bg-accent-secondary hover:brightness-110 text-[#090D14] transition-all flex items-center gap-1.5 cursor-pointer shadow-md font-mono"
                         >
                           <ChevronRight size={15} />
                           <span>Open Roadmap</span>
@@ -823,7 +823,7 @@ export const Courses: React.FC = () => {
 
                         <button
                           onClick={handleOpenPrimaryNotes}
-                          className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] hover:border-accent-amber/40 text-zinc-300 border border-white/8 transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+                          className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] hover:border-accent-amber/40 text-zinc-300 border border-white/[0.08] transition-all flex items-center gap-2 cursor-pointer shadow-sm"
                           title="Open notes panel for this roadmap & course"
                         >
                           <FileText size={13} className={primaryNotes.length > 0 ? "text-accent-amber" : "text-zinc-400"} />
@@ -837,7 +837,7 @@ export const Courses: React.FC = () => {
 
                         <button
                           onClick={() => setShowTemplateModal(true)}
-                          className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/8 transition-colors flex items-center gap-1.5 cursor-pointer"
+                          className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] transition-colors flex items-center gap-1.5 cursor-pointer"
                         >
                           <Sparkles size={13} className="text-accent-amber" />
                           <span>Change Path</span>
@@ -899,7 +899,7 @@ export const Courses: React.FC = () => {
                       const matchingTpl = findTemplateForCourse(course);
                       const courseNotes = getNotesForCourse(course.id);
                       return (
-                        <Card key={course.id} padding="p-4" className="bg-[#0E121B]/80 hover:bg-[#121722] border-white/6 transition-all">
+                        <Card key={course.id} padding="p-4" className="bg-[#0E121B]/80 hover:bg-[#121722] border-white/[0.06] transition-all">
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -947,7 +947,7 @@ export const Courses: React.FC = () => {
                                 className={`px-3 py-1.5 rounded-lg text-xs border transition-all font-medium flex items-center gap-1.5 cursor-pointer shadow-sm ${
                                   courseNotes.length > 0
                                     ? 'bg-accent-amber/10 hover:bg-accent-amber/20 text-accent-amber border-accent-amber/30'
-                                    : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border-white/8 hover:border-white/20'
+                                    : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border-white/[0.08] hover:border-white/20'
                                 }`}
                                 title={`View notes for ${course.title}`}
                               >
@@ -966,7 +966,7 @@ export const Courses: React.FC = () => {
                                     loadTemplate(matchingTpl.id);
                                     setActiveView('roadmap');
                                   }}
-                                  className="px-3 py-1.5 rounded-lg text-xs bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 transition-all font-medium flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                  className="px-3 py-1.5 rounded-lg text-xs bg-accent-secondary/10 hover:bg-accent-secondary/20 text-accent-secondary border border-accent-secondary/30 transition-all font-medium flex items-center gap-1.5 cursor-pointer shadow-sm"
                                   title="Open this course in the Interactive Roadmap"
                                 >
                                   <Layers size={13} />
@@ -997,7 +997,7 @@ export const Courses: React.FC = () => {
                     </p>
                     <button
                       onClick={() => setShowCourseModal(true)}
-                      className="px-4 py-2 text-xs rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/8 transition-colors cursor-pointer font-medium"
+                      className="px-4 py-2 text-xs rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] transition-colors cursor-pointer font-medium"
                     >
                       + Add a course
                     </button>
@@ -1015,7 +1015,7 @@ export const Courses: React.FC = () => {
           <div>
             <label className="block text-xs text-txt-muted mb-1 font-medium">Course Title *</label>
             <input
-              className="w-full bg-[#0D1017] border border-white/8 rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
+              className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
               value={courseForm.title}
               onChange={e => setCourseForm(f => ({ ...f, title: e.target.value }))}
               placeholder="e.g. Modern React & TypeScript Bootcamp"
@@ -1025,7 +1025,7 @@ export const Courses: React.FC = () => {
           <div>
             <label className="block text-xs text-txt-muted mb-1 font-medium">Source URL (optional)</label>
             <input
-              className="w-full bg-[#0D1017] border border-white/8 rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
+              className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
               value={courseForm.source_url}
               onChange={e => setCourseForm(f => ({ ...f, source_url: e.target.value }))}
               placeholder="https://coursera.org/... or https://youtube.com/..."
@@ -1036,7 +1036,7 @@ export const Courses: React.FC = () => {
               <label className="block text-xs text-txt-muted mb-1 font-medium">Start Date</label>
               <input
                 type="date"
-                className="w-full bg-[#0D1017] border border-white/8 rounded-xl px-3 py-2 text-sm text-txt-primary outline-none"
+                className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none"
                 value={courseForm.start_date}
                 onChange={e => setCourseForm(f => ({ ...f, start_date: e.target.value }))}
               />
@@ -1044,7 +1044,7 @@ export const Courses: React.FC = () => {
             <div>
               <label className="block text-xs text-txt-muted mb-1 font-medium">Status</label>
               <select
-                className="w-full bg-[#0D1017] border border-white/8 rounded-xl px-3 py-2 text-sm text-txt-primary outline-none"
+                className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none"
                 value={courseForm.status}
                 onChange={e => setCourseForm(f => ({ ...f, status: e.target.value as CourseStatus }))}
               >
@@ -1070,7 +1070,7 @@ export const Courses: React.FC = () => {
           <div>
             <label className="block text-xs text-txt-muted mb-1 font-medium">Topic Title *</label>
             <input
-              className="w-full bg-[#0D1017] border border-white/8 rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
+              className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
               value={topicForm.label}
               onChange={e => setTopicForm(f => ({ ...f, label: e.target.value }))}
               placeholder="e.g. Asynchronous JavaScript & Promises"
@@ -1083,7 +1083,7 @@ export const Courses: React.FC = () => {
           <div>
             <label className="block text-xs text-txt-muted mb-1 font-medium">Short Description</label>
             <textarea
-              className="w-full bg-[#0D1017] border border-white/8 rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors resize-none"
+              className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors resize-none"
               rows={2}
               value={topicForm.description}
               onChange={e => setTopicForm(f => ({ ...f, description: e.target.value }))}
@@ -1095,7 +1095,7 @@ export const Courses: React.FC = () => {
           <div>
             <label className="block text-xs text-txt-muted mb-1 font-medium">Phase / Stage</label>
             <input
-              className="w-full bg-[#0D1017] border border-white/8 rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
+              className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
               value={topicForm.phase}
               onChange={e => setTopicForm(f => ({ ...f, phase: e.target.value }))}
               placeholder="e.g. Frontend Core, Backend, DevOps"
@@ -1116,7 +1116,7 @@ export const Courses: React.FC = () => {
               <span className="ml-1.5 text-[10px] font-normal text-zinc-500">(tracks progress in My Courses)</span>
             </label>
             <select
-              className="w-full bg-[#0D1017] border border-white/8 rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50"
+              className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50"
               value={topicForm.courseId}
               onChange={e => setTopicForm(f => ({ ...f, courseId: e.target.value }))}
             >
@@ -1140,7 +1140,7 @@ export const Courses: React.FC = () => {
           <div>
             <label className="block text-xs text-txt-muted mb-1 font-medium">Prerequisite (Unlocks After)</label>
             <select
-              className="w-full bg-[#0D1017] border border-white/8 rounded-xl px-3 py-2 text-sm text-txt-primary outline-none"
+              className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none"
               value={topicForm.parentId}
               onChange={e => setTopicForm(f => ({ ...f, parentId: e.target.value }))}
             >
@@ -1158,7 +1158,7 @@ export const Courses: React.FC = () => {
           <div>
             <label className="block text-xs text-txt-muted mb-1 font-medium">Initial Status</label>
             <select
-              className="w-full bg-[#0D1017] border border-white/8 rounded-xl px-3 py-2 text-sm text-txt-primary outline-none"
+              className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none"
               value={topicForm.status}
               onChange={e => setTopicForm(f => ({ ...f, status: e.target.value as TopicStatus }))}
             >
@@ -1254,11 +1254,11 @@ export const Courses: React.FC = () => {
                         className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 border ${
                           isActive
                             ? 'bg-white/10 text-accent-amber border-accent-amber/40 shadow-sm'
-                            : 'bg-white/[0.02] text-zinc-400 border-white/6 hover:text-white hover:bg-white/[0.05]'
+                            : 'bg-white/[0.02] text-zinc-400 border-white/[0.06] hover:text-white hover:bg-white/[0.05]'
                         }`}
                       >
                         <span>{cat.label}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/6 text-zinc-400">
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/[0.06] text-zinc-400">
                           {count}
                         </span>
                       </button>
@@ -1276,13 +1276,13 @@ export const Courses: React.FC = () => {
                     <div
                       key={tpl.id}
                       onClick={() => handleSelectTemplate(tpl.id)}
-                      className="p-4 rounded-xl border border-white/8 bg-white/[0.02] hover:bg-white/[0.06] hover:border-accent-amber/40 transition-all cursor-pointer group flex flex-col justify-between"
+                      className="p-4 rounded-xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] hover:border-accent-amber/40 transition-all cursor-pointer group flex flex-col justify-between"
                     >
                       <div>
                         {/* Header */}
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="text-2xl p-1.5 rounded-lg bg-white/[0.04] border border-white/6 flex-shrink-0">
+                            <span className="text-2xl p-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] flex-shrink-0">
                               {tpl.icon}
                             </span>
                             <div className="min-w-0">
@@ -1336,7 +1336,7 @@ export const Courses: React.FC = () => {
                           {phaseSet.map((ph, idx) => (
                             <span
                               key={idx}
-                              className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.04] text-zinc-400 border border-white/6 truncate max-w-[130px]"
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.04] text-zinc-400 border border-white/[0.06] truncate max-w-[130px]"
                             >
                               {ph}
                             </span>
@@ -1350,10 +1350,10 @@ export const Courses: React.FC = () => {
                       </div>
 
                       {/* Footer Actions */}
-                      <div className="pt-2.5 border-t border-white/6 flex items-center justify-between gap-2 text-xs" onClick={e => e.stopPropagation()}>
+                      <div className="pt-2.5 border-t border-white/[0.06] flex items-center justify-between gap-2 text-xs" onClick={e => e.stopPropagation()}>
                         <button
                           onClick={() => handleSelectTemplate(tpl.id)}
-                          className="px-2.5 py-1.5 rounded-lg text-xs bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/8 transition-colors flex items-center gap-1.5 cursor-pointer"
+                          className="px-2.5 py-1.5 rounded-lg text-xs bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] transition-colors flex items-center gap-1.5 cursor-pointer"
                           title="Load topics onto the interactive roadmap canvas"
                         >
                           <Layers size={12} className="text-accent-amber" />
@@ -1426,7 +1426,7 @@ export const Courses: React.FC = () => {
           {/* Tab Content: Import Custom Roadmap */}
           {templateTab === 'import' && (
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div className="bg-white/[0.02] border border-white/8 rounded-xl p-3.5 space-y-2">
+              <div className="bg-white/[0.02] border border-white/[0.08] rounded-xl p-3.5 space-y-2">
                 <h4 className="text-xs font-semibold text-white flex items-center gap-1.5">
                   <Layers size={13} className="text-accent-amber" />
                   Paste JSON or Plain Text Curriculum
@@ -1459,7 +1459,7 @@ export const Courses: React.FC = () => {
                       }, null, 2));
                       setImportError(null);
                     }}
-                    className="text-[10px] px-2.5 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/8 transition-colors cursor-pointer"
+                    className="text-[10px] px-2.5 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] transition-colors cursor-pointer"
                   >
                     Load JSON Format Example
                   </button>
@@ -1478,7 +1478,7 @@ export const Courses: React.FC = () => {
                       );
                       setImportError(null);
                     }}
-                    className="text-[10px] px-2.5 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/8 transition-colors cursor-pointer"
+                    className="text-[10px] px-2.5 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] transition-colors cursor-pointer"
                   >
                     Load Text Format Example
                   </button>
@@ -1569,7 +1569,7 @@ export const Courses: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/6">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/[0.06]">
                 <Button variant="ghost" size="sm" type="button" onClick={() => setShowTemplateModal(false)}>
                   Cancel
                 </Button>
@@ -1603,7 +1603,7 @@ export const Courses: React.FC = () => {
         {selectedCourseForNotes && (
           <div className="space-y-4 flex flex-col h-full">
             {/* Course Summary Pill & Full Workspace Link */}
-            <div className="p-3.5 rounded-xl bg-[#0E121B] border border-white/6 flex items-center justify-between gap-3">
+            <div className="p-3.5 rounded-xl bg-[#0E121B] border border-white/[0.06] flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Badge status={selectedCourseForNotes.status} />
                 <span className="text-xs text-zinc-300 font-medium">
@@ -1624,7 +1624,7 @@ export const Courses: React.FC = () => {
             {/* Quick Add Note box */}
             <form
               onSubmit={handleCreateQuickNote}
-              className="p-3.5 rounded-xl bg-gradient-to-b from-[#0E121B] to-[#121622] border border-white/8 space-y-2.5 shadow-md"
+              className="p-3.5 rounded-xl bg-gradient-to-b from-[#0E121B] to-[#121622] border border-white/[0.08] space-y-2.5 shadow-md"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-white flex items-center gap-1.5">
@@ -1646,7 +1646,7 @@ export const Courses: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isCreatingQuickNote}
-                  className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-accent-amber hover:bg-amber-400 disabled:opacity-50 text-[#090D14] transition-all flex items-center gap-1.5 cursor-pointer font-mono flex-shrink-0 shadow-sm"
+                  className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-accent-amber hover:brightness-110 disabled:opacity-50 text-[#090D14] transition-all flex items-center gap-1.5 cursor-pointer font-mono flex-shrink-0 shadow-sm"
                 >
                   <Plus size={13} />
                   <span>{isCreatingQuickNote ? 'Adding...' : 'Add & Write'}</span>
@@ -1662,7 +1662,7 @@ export const Courses: React.FC = () => {
                 value={notesSearchQuery}
                 onChange={e => setNotesSearchQuery(e.target.value)}
                 placeholder="Search notes in this course..."
-                className="w-full bg-[#0E121B] border border-white/6 rounded-xl pl-8 pr-8 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-accent-amber/40 transition-colors"
+                className="w-full bg-[#0E121B] border border-white/[0.06] rounded-xl pl-8 pr-8 py-2 text-xs text-white placeholder-zinc-500 outline-none focus:border-accent-amber/40 transition-colors"
               />
               {notesSearchQuery && (
                 <button
@@ -1683,7 +1683,7 @@ export const Courses: React.FC = () => {
                     <div
                       key={note.id}
                       onClick={() => handleOpenNoteInEditor(note)}
-                      className="group p-3.5 rounded-xl border border-white/6 hover:border-accent-amber/30 bg-[#0E121B]/90 hover:bg-[#131722] transition-all cursor-pointer space-y-2 shadow-sm relative"
+                      className="group p-3.5 rounded-xl border border-white/[0.06] hover:border-accent-amber/30 bg-[#0E121B]/90 hover:bg-[#131722] transition-all cursor-pointer space-y-2 shadow-sm relative"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
@@ -1696,7 +1696,7 @@ export const Courses: React.FC = () => {
                               {formatDate(note.updated_at)}
                             </span>
                             {note.topic_id && (
-                              <span className="px-1.5 py-0.2 rounded bg-white/[0.04] text-zinc-300 border border-white/6 truncate max-w-[170px]">
+                              <span className="px-1.5 py-0.2 rounded bg-white/[0.04] text-zinc-300 border border-white/[0.06] truncate max-w-[170px]">
                                 🗺️ {getTopicName(note.topic_id)}
                               </span>
                             )}
@@ -1726,14 +1726,14 @@ export const Courses: React.FC = () => {
                       {note.tags && note.tags.length > 0 && (
                         <div className="flex items-center gap-1 flex-wrap pt-0.5">
                           {note.tags.map(t => (
-                            <span key={t} className="text-[9px] px-1.5 py-0.2 rounded bg-white/[0.04] text-zinc-400 border border-white/6 font-mono">
+                            <span key={t} className="text-[9px] px-1.5 py-0.2 rounded bg-white/[0.04] text-zinc-400 border border-white/[0.06] font-mono">
                               #{t}
                             </span>
                           ))}
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between pt-1.5 border-t border-white/4 text-[10px]">
+                      <div className="flex items-center justify-between pt-1.5 border-t border-white/[0.04] text-[10px]">
                         <span className="text-zinc-500">Click to open & edit</span>
                         <span className="text-accent-amber font-mono flex items-center gap-1 font-semibold group-hover:translate-x-0.5 transition-transform">
                           <span>Open Editor</span>
@@ -1744,7 +1744,7 @@ export const Courses: React.FC = () => {
                   );
                 })
               ) : (
-                <div className="text-center py-10 px-4 bg-[#0E121B]/40 rounded-xl border border-dashed border-white/8 space-y-2">
+                <div className="text-center py-10 px-4 bg-[#0E121B]/40 rounded-xl border border-dashed border-white/[0.08] space-y-2">
                   <FileText size={28} className="text-zinc-600 mx-auto opacity-70" />
                   <p className="text-xs font-semibold text-zinc-300">
                     {notesSearchQuery ? 'No matching notes found' : 'No notes linked yet'}

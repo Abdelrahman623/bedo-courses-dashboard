@@ -8,14 +8,16 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { useProjectsStore } from '../store/projectsStore';
-import { safeUrl } from '../lib/utils';
+import { safeUrl, getStatusColor } from '../lib/utils';
 import type { ProjectStatus, ProjectType } from '../types';
 
-const KANBAN_COLS: { status: ProjectStatus; label: string; dotColor: string }[] = [
-  { status: 'idea',        label: 'Backlog / Ideas', dotColor: '#71717A' },
-  { status: 'in_progress', label: 'In Progress',     dotColor: '#F0A500' },
-  { status: 'completed',   label: 'Completed',       dotColor: '#00C896' },
-  { status: 'deployed',    label: 'Shipped / Live',  dotColor: '#4FC3F7' },
+// Column dot colors come from getStatusColor() at render time so they follow the theme
+// (in_progress → primary, deployed → tertiary; completed / idea stay semantic).
+const KANBAN_COLS: { status: ProjectStatus; label: string }[] = [
+  { status: 'idea',        label: 'Backlog / Ideas' },
+  { status: 'in_progress', label: 'In Progress' },
+  { status: 'completed',   label: 'Completed' },
+  { status: 'deployed',    label: 'Shipped / Live' },
 ];
 
 const EMPTY_FORM = {
@@ -37,7 +39,6 @@ export const Projects: React.FC = () => {
     if (!form.title.trim()) return;
     setSaving(true);
     await addProject({
-      user_id: 'local',
       title: form.title,
       description: form.description,
       type: form.type,
@@ -224,7 +225,7 @@ export const Projects: React.FC = () => {
                 {/* Column Header */}
                 <div className="flex items-center justify-between px-1">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: col.dotColor }} />
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getStatusColor(col.status) }} />
                     <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                       {col.label}
                     </span>

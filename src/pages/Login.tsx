@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, Sparkles, Database, User } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle2, Loader2, Database, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 
 type AuthMode = 'signin' | 'signup' | 'forgot';
 
 export const Login: React.FC = () => {
-  const { signInDemo, isSupabaseConfigured } = useAuth();
+  const { isSupabaseConfigured } = useAuth();
   const [mode, setMode] = useState<AuthMode>('signin');
   const [identifier, setIdentifier] = useState(''); // Email OR Username for sign in
   const [username, setUsername] = useState('');     // Username for sign up
@@ -27,30 +27,19 @@ export const Login: React.FC = () => {
       return clean; // Already an email
     }
 
-    // Try RPC function first (defined in SQL migration)
-    try {
-      const { data: rpcEmail, error: rpcErr } = await supabase.rpc('get_email_by_username', {
-        p_username: clean,
-      });
-      if (!rpcErr && rpcEmail) {
-        return rpcEmail as string;
-      }
-    } catch {
-      // Fallback to direct query below
-    }
+    // Row Level Security means a logged-out visitor can't read public.profiles
+    // directly any more (that's the point — it used to expose every account's
+    // email). This SECURITY DEFINER RPC answers the one question the login
+    // screen needs and nothing else. See supabase_admin_security.sql.
+    const { data: rpcEmail, error: rpcErr } = await supabase.rpc('get_email_by_username', {
+      p_username: clean,
+    });
 
-    // Fallback: Query profiles table directly
-    const { data: prof, error: profErr } = await supabase
-      .from('profiles')
-      .select('email')
-      .ilike('username', clean)
-      .maybeSingle();
-
-    if (profErr || !prof?.email) {
+    if (rpcErr || !rpcEmail) {
       throw new Error(`No account found with username "${clean}". Please verify your username or sign in with your email.`);
     }
 
-    return prof.email;
+    return rpcEmail as string;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,7 +47,7 @@ export const Login: React.FC = () => {
     clearMessages();
 
     if (!isSupabaseConfigured) {
-      setError('Supabase is not configured yet. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env, or use Demo Mode below.');
+      setError('Supabase is not configured yet. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file, then reload.');
       return;
     }
 
@@ -95,14 +84,13 @@ export const Login: React.FC = () => {
           throw new Error('Username must be 3-24 characters and only contain letters, numbers, underscores, or hyphens.');
         }
 
-        // Check if username is already taken
-        const { data: existingUser } = await supabase
-          .from('profiles')
-          .select('id')
-          .ilike('username', cleanUsername)
-          .maybeSingle();
+        // Check if username is already taken (RLS-safe: returns a bare boolean,
+        // never anyone's id or email).
+        const { data: usernameTaken } = await supabase.rpc('username_exists', {
+          p_username: cleanUsername,
+        });
 
-        if (existingUser) {
+        if (usernameTaken) {
           throw new Error(`Username "${cleanUsername}" is already taken. Please choose another username.`);
         }
 
@@ -119,6 +107,15 @@ export const Login: React.FC = () => {
         });
 
         if (signUpError) throw signUpError;
+
+        // Supabase returns a user with an EMPTY identities array (no error) when the
+        // email is already registered — this is intentional, to prevent account
+        // enumeration. Detect it so we don't falsely tell the user to "check email".
+        const alreadyRegistered = !!data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
+
+        if (alreadyRegistered) {
+          throw new Error('This email is already registered. Try signing in instead, or use "Forgot password" if you don\'t remember your password.');
+        }
 
         // Ensure profiles table has username and email recorded
         if (data?.user) {
@@ -139,7 +136,7 @@ export const Login: React.FC = () => {
         if (data?.session) {
           // Instantly authenticated!
         } else {
-          setSuccess(`Account created for @${cleanUsername}! If confirmation is required, check your email inbox to verify, then sign in.`);
+          setSuccess(`Account created for @${cleanUsername}! Check your email inbox (and spam folder) for a confirmation link, then sign in.`);
         }
       } else {
         // Forgot password: can use email or username
@@ -164,45 +161,41 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-bg-base flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Ambient background blobs */}
-      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-accent-amber/5 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[400px] h-[400px] rounded-full bg-accent-mint/5 blur-[100px] pointer-events-none" />
+    <div className="min-h-screen bg-gradient-to-b from-[#111A24] via-[#0D141C] to-[#080B10] flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Ambient background glows */}
+      <div className="absolute top-[-18%] left-[-12%] w-[520px] h-[520px] rounded-full bg-accent-secondary/10 blur-[130px] pointer-events-none" />
+      <div className="absolute bottom-[-22%] right-[-12%] w-[480px] h-[480px] rounded-full bg-accent-tertiary/10 blur-[130px] pointer-events-none" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[420px] h-[420px] rounded-full bg-accent-amber/10 blur-[120px] pointer-events-none" />
 
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: 'easeOut' as const }}
-        className="w-full max-w-md"
+        className="w-full max-w-md relative z-10"
       >
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-accent-amber flex items-center justify-center shadow-glow">
-            <GraduationCap size={20} className="text-bg-base" />
+        {/* Logo / Brand */}
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <div className="brand-logo-glow relative flex items-center justify-center w-12 h-12 rounded-[14px] bg-[#081722] border flex-shrink-0 overflow-hidden">
+            <img src="/nl-logo.png" alt="Noname Learn" className="w-9 h-9 object-contain" />
           </div>
-          <span className="text-xl font-bold text-txt-primary">
-            Bedo<span className="text-accent-amber"> Learn</span>
-          </span>
+          <div className="flex items-center gap-1 whitespace-nowrap">
+            <span className="font-bold text-2xl leading-none tracking-tight text-white">Noname</span>
+            <span className="text-accent-secondary text-2xl leading-none font-semibold tracking-tight">learn</span>
+          </div>
         </div>
 
-        {/* Local / Supabase Mode Banner */}
+        {/* Supabase configuration warning */}
         {!isSupabaseConfigured && (
-          <div className="mb-4 bg-bg-surface border border-accent-amber/20 rounded-xl p-3 flex items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 text-txt-muted">
-              <Database size={14} className="text-accent-amber flex-shrink-0" />
-              <span>Offline demo ready. No Supabase keys required.</span>
-            </div>
-            <button
-              onClick={signInDemo}
-              className="flex-shrink-0 px-2.5 py-1 bg-accent-amber/20 hover:bg-accent-amber/30 text-accent-amber rounded-lg font-medium transition-colors cursor-pointer"
-            >
-              Enter Demo
-            </button>
+          <div className="mb-4 bg-[#131722] border border-rose-500/25 rounded-xl p-3 flex items-center gap-2 text-xs shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+            <Database size={14} className="text-rose-400 flex-shrink-0" />
+            <span className="text-zinc-400">
+              Not connected to Supabase. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file — every account and all of its data lives in Supabase, so sign-in won't work without it.
+            </span>
           </div>
         )}
 
         {/* Card */}
-        <div className="bg-bg-surface border border-white/8 rounded-2xl p-8 shadow-card">
+        <div className="bg-[#131722] border border-white/[0.08] rounded-2xl p-8 shadow-2xl shadow-black/40">
           {/* Header */}
           <AnimatePresence mode="wait">
             <motion.div
@@ -213,8 +206,8 @@ export const Login: React.FC = () => {
               transition={{ duration: 0.2 }}
               className="mb-6"
             >
-              <h1 className="text-xl font-bold text-txt-primary">{modeConfig[mode].title}</h1>
-              <p className="text-sm text-txt-muted mt-1">{modeConfig[mode].subtitle}</p>
+              <h1 className="text-xl font-bold text-white tracking-tight">{modeConfig[mode].title}</h1>
+              <p className="text-sm text-zinc-400 mt-1">{modeConfig[mode].subtitle}</p>
             </motion.div>
           </AnimatePresence>
 
@@ -225,7 +218,7 @@ export const Login: React.FC = () => {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="flex items-center gap-2 bg-accent-coral/10 border border-accent-coral/20 rounded-xl px-3 py-2.5 mb-4 text-sm text-accent-coral"
+                className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2.5 mb-4 text-sm text-rose-400"
               >
                 <AlertCircle size={14} className="flex-shrink-0" />
                 <span>{error}</span>
@@ -236,9 +229,10 @@ export const Login: React.FC = () => {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="flex items-center gap-2 bg-accent-mint/10 border border-accent-mint/20 rounded-xl px-3 py-2.5 mb-4 text-sm text-accent-mint"
+                className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2.5 mb-4 text-sm text-emerald-400"
               >
-                ✓ {success}
+                <CheckCircle2 size={14} className="flex-shrink-0" />
+                <span>{success}</span>
               </motion.div>
             )}
           </AnimatePresence>
@@ -248,7 +242,7 @@ export const Login: React.FC = () => {
             {/* SIGN IN: Email OR Username */}
             {mode === 'signin' && (
               <div className="relative">
-                <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted pointer-events-none" />
+                <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Username or Email"
@@ -257,7 +251,7 @@ export const Login: React.FC = () => {
                   required
                   autoCapitalize="none"
                   autoCorrect="off"
-                  className="w-full bg-bg-surface2 border border-white/8 rounded-xl pl-9 pr-4 py-2.5 text-sm text-txt-primary placeholder:text-txt-muted outline-none focus:border-accent-amber/50 transition-colors"
+                  className="w-full bg-[#0D1017] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-accent-amber/50 transition-colors"
                 />
               </div>
             )}
@@ -265,7 +259,7 @@ export const Login: React.FC = () => {
             {/* SIGN UP: Username field */}
             {mode === 'signup' && (
               <div className="relative">
-                <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted pointer-events-none" />
+                <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Username (e.g. bedo)"
@@ -274,7 +268,7 @@ export const Login: React.FC = () => {
                   required
                   autoCapitalize="none"
                   autoCorrect="off"
-                  className="w-full bg-bg-surface2 border border-white/8 rounded-xl pl-9 pr-4 py-2.5 text-sm text-txt-primary placeholder:text-txt-muted outline-none focus:border-accent-amber/50 transition-colors"
+                  className="w-full bg-[#0D1017] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-accent-amber/50 transition-colors font-mono"
                 />
               </div>
             )}
@@ -282,7 +276,7 @@ export const Login: React.FC = () => {
             {/* SIGN UP or FORGOT: Email field */}
             {mode !== 'signin' && (
               <div className="relative">
-                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted pointer-events-none" />
+                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
                 <input
                   type={mode === 'forgot' ? 'text' : 'email'}
                   placeholder={mode === 'forgot' ? 'Username or Email address' : 'Email address'}
@@ -291,7 +285,7 @@ export const Login: React.FC = () => {
                   required
                   autoCapitalize="none"
                   autoCorrect="off"
-                  className="w-full bg-bg-surface2 border border-white/8 rounded-xl pl-9 pr-4 py-2.5 text-sm text-txt-primary placeholder:text-txt-muted outline-none focus:border-accent-amber/50 transition-colors"
+                  className="w-full bg-[#0D1017] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-accent-amber/50 transition-colors"
                 />
               </div>
             )}
@@ -299,19 +293,19 @@ export const Login: React.FC = () => {
             {/* Password (for signin & signup) */}
             {mode !== 'forgot' && (
               <div className="relative">
-                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-txt-muted pointer-events-none" />
+                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
                 <input
                   type={showPw ? 'text' : 'password'}
                   placeholder="Password"
                   value={password}
                   onChange={e => { setPassword(e.target.value); clearMessages(); }}
                   required
-                  className="w-full bg-bg-surface2 border border-white/8 rounded-xl pl-9 pr-10 py-2.5 text-sm text-txt-primary placeholder:text-txt-muted outline-none focus:border-accent-amber/50 transition-colors"
+                  className="w-full bg-[#0D1017] border border-white/[0.08] rounded-lg pl-9 pr-10 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-accent-amber/50 transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-muted hover:text-txt-secondary transition-colors cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
                 >
                   {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
@@ -324,7 +318,7 @@ export const Login: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => { setMode('forgot'); clearMessages(); }}
-                  className="text-xs text-txt-muted hover:text-accent-amber transition-colors cursor-pointer"
+                  className="text-xs text-zinc-400 hover:text-accent-amber transition-colors cursor-pointer"
                 >
                   Forgot password?
                 </button>
@@ -335,7 +329,7 @@ export const Login: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-accent-amber hover:bg-accent-amber/90 text-bg-base font-semibold text-sm rounded-xl py-2.5 transition-colors shadow-glow disabled:opacity-60 mt-1 cursor-pointer"
+              className="btn-accent-gradient w-full flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98] text-[#0D1017] font-semibold text-sm rounded-lg py-2.5 transition-all duration-100 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.3),0_1px_2px_rgba(0,0,0,0.4)] disabled:opacity-50 disabled:cursor-not-allowed mt-1 cursor-pointer"
             >
               {loading && <Loader2 size={15} className="animate-spin" />}
               {modeConfig[mode].cta}
@@ -343,7 +337,7 @@ export const Login: React.FC = () => {
           </form>
 
           {/* Mode switch */}
-          <div className="mt-4 text-center text-sm text-txt-muted">
+          <div className="mt-4 text-center text-sm text-zinc-400">
             {mode === 'signin' && (
               <>Don't have an account yet?{' '}
                 <button onClick={() => { setMode('signup'); clearMessages(); }} className="text-accent-amber hover:underline font-medium cursor-pointer">
@@ -365,21 +359,10 @@ export const Login: React.FC = () => {
             )}
           </div>
 
-          {/* Demo Mode Button */}
-          <div className="mt-5 pt-4">
-            <button
-              type="button"
-              onClick={signInDemo}
-              className="w-full flex items-center justify-center gap-2 bg-bg-surface2 hover:bg-white/6 border border-accent-amber/30 text-accent-amber text-xs font-medium rounded-xl py-2 transition-all duration-150 cursor-pointer"
-            >
-              <Sparkles size={14} />
-              Skip Login & Explore in Demo Mode
-            </button>
-          </div>
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-txt-muted mt-5">
+        <p className="text-center text-xs text-zinc-500 mt-5">
           Secured by Supabase Auth & PostgreSQL 🔒
         </p>
       </motion.div>

@@ -7,6 +7,8 @@ export interface Profile {
   avatar_url?: string;
   bio?: string;
   weekly_goal_hours: number;
+  /** DB-controlled admin flag (public.profiles.is_admin). Never set from the client. */
+  is_admin?: boolean;
   created_at: string;
 }
 

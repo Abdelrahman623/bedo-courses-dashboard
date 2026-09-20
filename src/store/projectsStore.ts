@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { storage, getActiveUserId } from '../lib/storage';
+import { getActiveUserId } from '../lib/storage';
 import type { Project } from '../types';
 
 interface ProjectsState {
@@ -9,14 +9,16 @@ interface ProjectsState {
   view: 'grid' | 'kanban';
 
   fetchProjects: () => Promise<void>;
-  addProject: (p: Omit<Project, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  addProject: (p: Omit<Project, 'id' | 'created_at' | 'updated_at' | 'user_id'>) => Promise<void>;
   updateProject: (id: string, changes: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   setView: (v: 'grid' | 'kanban') => void;
 }
 
+// Starts empty and is filled from Supabase on sign-in. Nothing is read from
+// the browser, so a new account never inherits the previous one's projects.
 export const useProjectsStore = create<ProjectsState>((set, get) => ({
-  projects: storage.get<Project[]>('projects', []),
+  projects: [],
   loading: false,
   view: 'grid',
 
@@ -25,25 +27,30 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
     set({ loading: true });
     try {
       const userId = await getActiveUserId();
-      const { data } = await supabase
+      if (!userId) {
+        set({ projects: [], loading: false });
+        return;
+      }
+
+      const { data, error } = await supabase
         .from('projects')
         .select('*')
-        .or(`user_id.eq.${userId},user_id.eq.local`)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (data && data.length > 0) {
-        set({ projects: data as Project[], loading: false });
-        storage.set('projects', data);
-      } else {
-        set({ loading: false });
-      }
-    } catch {
+      // An empty result is a real answer ("this account has no projects"),
+      // not a reason to keep showing whatever was on screen before.
+      set({ projects: error ? get().projects : ((data as Project[]) ?? []), loading: false });
+    } catch (err) {
+      console.warn('[ProjectsStore] Fetch failed:', err);
       set({ loading: false });
     }
   },
 
   addProject: async (p) => {
     const userId = await getActiveUserId();
+    if (!userId) return;
+
     const now = new Date().toISOString();
     const newProject: Project = {
       ...p,
@@ -53,49 +60,42 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
       updated_at: now,
     };
 
-    // 1. Optimistic update
-    const updated = [newProject, ...get().projects];
-    set({ projects: updated });
-    storage.set('projects', updated);
+    // Optimistic on screen, then written to the account.
+    set({ projects: [newProject, ...get().projects] });
 
-    // 2. Cloud sync
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('projects').insert(newProject);
-      } catch (err) {
-        console.warn('[ProjectsStore] Saved locally, cloud sync pending:', err);
-      }
+    const { error } = await supabase.from('projects').insert(newProject);
+    if (error) {
+      console.warn('[ProjectsStore] Insert failed, rolling back:', error.message);
+      set({ projects: get().projects.filter(x => x.id !== newProject.id) });
     }
   },
 
   updateProject: async (id, changes) => {
+    const previous = get().projects;
     const now = new Date().toISOString();
-    const updated = get().projects.map(p =>
-      p.id === id ? { ...p, ...changes, updated_at: now } : p
-    );
-    set({ projects: updated });
-    storage.set('projects', updated);
+    set({
+      projects: previous.map(p => (p.id === id ? { ...p, ...changes, updated_at: now } : p)),
+    });
 
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('projects').update({ ...changes, updated_at: now }).eq('id', id);
-      } catch (err) {
-        console.warn('[ProjectsStore] Update failed to sync:', err);
-      }
+    const { error } = await supabase
+      .from('projects')
+      .update({ ...changes, updated_at: now })
+      .eq('id', id);
+
+    if (error) {
+      console.warn('[ProjectsStore] Update failed, rolling back:', error.message);
+      set({ projects: previous });
     }
   },
 
   deleteProject: async (id) => {
-    const updated = get().projects.filter(p => p.id !== id);
-    set({ projects: updated });
-    storage.set('projects', updated);
+    const previous = get().projects;
+    set({ projects: previous.filter(p => p.id !== id) });
 
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('projects').delete().eq('id', id);
-      } catch (err) {
-        console.warn('[ProjectsStore] Delete failed to sync:', err);
-      }
+    const { error } = await supabase.from('projects').delete().eq('id', id);
+    if (error) {
+      console.warn('[ProjectsStore] Delete failed, rolling back:', error.message);
+      set({ projects: previous });
     }
   },
 

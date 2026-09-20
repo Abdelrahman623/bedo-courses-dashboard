@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { storage, getActiveUserId } from '../lib/storage';
+import { getActiveUserId } from '../lib/storage';
 import type { Note } from '../types';
 
 interface NotesState {
@@ -11,7 +11,7 @@ interface NotesState {
 
   fetchNotes: () => Promise<void>;
   setActiveNote: (note: Note | null) => void;
-  createNote: (partial: Partial<Note>) => Promise<Note>;
+  createNote: (partial: Partial<Note>) => Promise<Note | null>;
   saveNote: (id: string, changes: Partial<Note>) => void;
   deleteNote: (id: string) => Promise<void>;
   setSearchQuery: (q: string) => void;
@@ -25,58 +25,66 @@ function debounceLocal(fn: (id: string, changes: Partial<Note>) => Promise<void>
   };
 }
 
+const normalizeNote = (n: Note): Note => ({
+  ...n,
+  note_type:
+    n.note_type === 'linked' || Boolean(n.course_id || n.topic_id || n.project_id)
+      ? 'linked'
+      : 'general',
+});
+
+// Starts empty and is filled from Supabase on sign-in — notes belong to the
+// account, not to the browser they were typed in.
 export const useNotesStore = create<NotesState>((set, get) => {
   const flushToDb = debounceLocal(async (id: string, changes: Partial<Note>) => {
     if (!isSupabaseConfigured) return;
     try {
-      await supabase.from('notes').update({ ...changes, updated_at: new Date().toISOString() }).eq('id', id);
+      const { error } = await supabase
+        .from('notes')
+        .update({ ...changes, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) console.warn('[NotesStore] Autosave failed:', error.message);
     } catch (err) {
-      console.warn('[NotesStore] Background sync error:', err);
+      console.warn('[NotesStore] Autosave threw:', err);
     }
   }, 1200);
 
-  const normalizeNote = (n: Note): Note => ({
-    ...n,
-    note_type: (n.note_type === 'linked' || Boolean(n.course_id || n.topic_id || n.project_id)) ? 'linked' : 'general',
-  });
-
-  const initialNotes = storage.get<Note[]>('notes', []).map(normalizeNote);
-
   return {
-    notes: initialNotes,
-    activeNote: initialNotes[0] || null,
+    notes: [],
+    activeNote: null,
     loading: false,
     searchQuery: '',
 
     fetchNotes: async () => {
-      const cached = storage.get<Note[]>('notes', []).map(normalizeNote);
-      if (cached.length > 0 && get().notes.length === 0) {
-        set({ notes: cached, activeNote: cached[0] || null });
-      }
-
       if (!isSupabaseConfigured) return;
-
       set({ loading: true });
       try {
         const userId = await getActiveUserId();
-        const { data } = await supabase
+        if (!userId) {
+          set({ notes: [], activeNote: null, loading: false });
+          return;
+        }
+
+        const { data, error } = await supabase
           .from('notes')
           .select('*')
-          .or(`user_id.eq.${userId},user_id.eq.local`)
+          .eq('user_id', userId)
           .order('updated_at', { ascending: false });
 
-        if (data && data.length > 0) {
-          const normalized = (data as Note[]).map(normalizeNote);
-          set({
-            notes: normalized,
-            activeNote: get().activeNote || normalized[0] || null,
-            loading: false,
-          });
-          storage.set('notes', normalized);
-        } else {
+        if (error) {
           set({ loading: false });
+          return;
         }
-      } catch {
+
+        const normalized = ((data as Note[]) ?? []).map(normalizeNote);
+        const stillExists = normalized.find(n => n.id === get().activeNote?.id) ?? null;
+        set({
+          notes: normalized,
+          activeNote: stillExists ?? normalized[0] ?? null,
+          loading: false,
+        });
+      } catch (err) {
+        console.warn('[NotesStore] Fetch failed:', err);
         set({ loading: false });
       }
     },
@@ -85,8 +93,13 @@ export const useNotesStore = create<NotesState>((set, get) => {
 
     createNote: async (partial) => {
       const userId = await getActiveUserId();
+      if (!userId) return null;
+
       const now = new Date().toISOString();
-      const isLinked = partial.note_type === 'linked' || Boolean(partial.course_id || partial.project_id || partial.topic_id);
+      const isLinked =
+        partial.note_type === 'linked' ||
+        Boolean(partial.course_id || partial.project_id || partial.topic_id);
+
       const newNote: Note = {
         id: crypto.randomUUID ? crypto.randomUUID() : `note_${Date.now()}`,
         user_id: userId,
@@ -101,18 +114,14 @@ export const useNotesStore = create<NotesState>((set, get) => {
         created_at: now,
       };
 
-      // 1. Optimistic Local Update
-      const updatedNotes = [newNote, ...get().notes];
-      set({ notes: updatedNotes, activeNote: newNote });
-      storage.set('notes', updatedNotes);
+      set({ notes: [newNote, ...get().notes], activeNote: newNote });
 
-      // 2. Cloud Sync
-      if (isSupabaseConfigured) {
-        try {
-          await supabase.from('notes').insert(newNote);
-        } catch (err) {
-          console.warn('[NotesStore] Saved locally, cloud sync pending:', err);
-        }
+      const { error } = await supabase.from('notes').insert(newNote);
+      if (error) {
+        console.warn('[NotesStore] Insert failed, rolling back:', error.message);
+        const remaining = get().notes.filter(n => n.id !== newNote.id);
+        set({ notes: remaining, activeNote: remaining[0] ?? null });
+        return null;
       }
 
       return newNote;
@@ -122,40 +131,39 @@ export const useNotesStore = create<NotesState>((set, get) => {
       const now = new Date().toISOString();
       const current = get().notes.find(n => n.id === id);
       const merged = { ...current, ...changes };
-      const isLinked = merged.note_type === 'linked' || Boolean(merged.course_id || merged.project_id || merged.topic_id);
-      const computedType: Note['note_type'] = isLinked ? 'linked' : 'general';
+      const isLinked =
+        merged.note_type === 'linked' ||
+        Boolean(merged.course_id || merged.project_id || merged.topic_id);
 
       const finalChanges = {
         ...changes,
-        note_type: changes.note_type ?? computedType,
+        note_type: changes.note_type ?? ((isLinked ? 'linked' : 'general') as Note['note_type']),
         updated_at: now,
       };
 
-      const updatedNotes = get().notes.map((n) =>
-        n.id === id ? { ...n, ...finalChanges } : n
-      );
+      const updatedNotes = get().notes.map(n => (n.id === id ? { ...n, ...finalChanges } : n));
       const updatedActive =
         get().activeNote?.id === id
           ? { ...get().activeNote!, ...finalChanges }
           : get().activeNote;
 
       set({ notes: updatedNotes, activeNote: updatedActive });
-      storage.set('notes', updatedNotes);
       flushToDb(id, finalChanges);
     },
 
     deleteNote: async (id) => {
-      const updated = get().notes.filter((n) => n.id !== id);
-      const nextActive = get().activeNote?.id === id ? updated[0] || null : get().activeNote;
-      set({ notes: updated, activeNote: nextActive });
-      storage.set('notes', updated);
+      const previous = get().notes;
+      const previousActive = get().activeNote;
+      const remaining = previous.filter(n => n.id !== id);
+      set({
+        notes: remaining,
+        activeNote: previousActive?.id === id ? remaining[0] ?? null : previousActive,
+      });
 
-      if (isSupabaseConfigured) {
-        try {
-          await supabase.from('notes').delete().eq('id', id);
-        } catch (err) {
-          console.warn('[NotesStore] Delete failed to sync:', err);
-        }
+      const { error } = await supabase.from('notes').delete().eq('id', id);
+      if (error) {
+        console.warn('[NotesStore] Delete failed, rolling back:', error.message);
+        set({ notes: previous, activeNote: previousActive });
       }
     },
 

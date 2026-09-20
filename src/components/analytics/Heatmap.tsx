@@ -3,12 +3,14 @@ import { motion } from 'framer-motion';
 import { buildHeatmapWeeks } from '../../lib/utils';
 import type { DailyActivity } from '../../types';
 
+// Study intensity ramp: five steps of the theme's PRIMARY role (0 = empty neutral).
+// Uses the RGB-channel variable so it re-colors instantly when the theme changes.
 const LEVEL_COLORS = [
-  '#1E2433',          // 0 = empty
-  '#00C89630',        // 1
-  '#00C89660',        // 2
-  '#00C89690',        // 3
-  '#00C896',          // 4
+  '#1E2433',                        // 0 = empty
+  'rgb(var(--c-primary) / 0.22)',   // 1
+  'rgb(var(--c-primary) / 0.45)',   // 2
+  'rgb(var(--c-primary) / 0.72)',   // 3
+  'rgb(var(--c-primary))',          // 4
 ];
 
 interface HeatmapProps {

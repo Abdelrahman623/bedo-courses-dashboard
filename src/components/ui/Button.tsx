@@ -1,17 +1,25 @@
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'ghost' | 'danger' | 'mint' | 'outline' | 'secondary';
+  variant?: 'primary' | 'ghost' | 'danger' | 'mint' | 'outline' | 'secondary' | 'tonal' | 'tonalTertiary';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   icon?: React.ReactNode;
 }
 
+// Theme roles: `primary` is the one solid CTA (tonal gradient of the primary role);
+// `tonal` / `tonalTertiary` bring the secondary / tertiary roles into buttons as a tinted
+// fill + outline, so a page can show two or three theme colors without any gradient.
+// `mint` is the semantic SUCCESS action (confirm/approve) and is intentionally not themed.
 const variants = {
   primary:
-    'text-[#0D0F14] font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.3),0_1px_2px_rgba(0,0,0,0.4)]',
+    'btn-accent-gradient text-[#0D0F14] font-semibold hover:brightness-110 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.28),0_1px_2px_rgba(0,0,0,0.4)]',
+  tonal:
+    'bg-accent-secondary/10 text-accent-secondary border border-accent-secondary/30 hover:bg-accent-secondary/20 hover:border-accent-secondary/50 active:bg-accent-secondary/10',
+  tonalTertiary:
+    'bg-accent-tertiary/10 text-accent-tertiary border border-accent-tertiary/30 hover:bg-accent-tertiary/20 hover:border-accent-tertiary/50 active:bg-accent-tertiary/10',
   mint:
-    'bg-[#00C896] text-[#0D0F14] hover:bg-[#00DBA5] active:bg-[#00B586] font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.3),0_1px_2px_rgba(0,0,0,0.4)]',
+    'bg-status-completed text-[#0D0F14] hover:brightness-110 font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.3),0_1px_2px_rgba(0,0,0,0.4)]',
   secondary:
     'bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.04] text-zinc-200 border border-white/[0.08] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]',
   ghost:
@@ -41,11 +49,6 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   ...rest
 }) => {
-  const isPrimary = variant === 'primary';
-  const accentStyle = isPrimary
-    ? { backgroundColor: 'var(--accent-amber, #F0A500)', ...style }
-    : style;
-
   return (
     <button
       type={type}
@@ -56,7 +59,7 @@ export const Button: React.FC<ButtonProps> = ({
         sizes[size],
         className,
       ].join(' ')}
-      style={accentStyle}
+      style={style}
       disabled={disabled || loading}
       onClick={onClick}
       {...rest}

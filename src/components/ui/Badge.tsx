@@ -1,5 +1,6 @@
 import React from 'react';
-import { STATUS_COLORS, STATUS_LABELS } from '../../lib/utils';
+import { SEMANTIC } from '../../lib/themes';
+import { STATUS_COLORS, STATUS_LABELS, getStatusColor } from '../../lib/utils';
 
 type StatusKey = keyof typeof STATUS_COLORS;
 
@@ -14,7 +15,7 @@ interface BadgeProps {
 export const Badge: React.FC<BadgeProps> = ({
   status, label, color, size = 'sm', dot = true,
 }) => {
-  const c = color || (status ? STATUS_COLORS[status] : '#8A94A8');
+  const c = color || (status ? getStatusColor(status) : SEMANTIC.neutral);
   const text = label || (status ? STATUS_LABELS[status as keyof typeof STATUS_LABELS] : '');
   const px = size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-3 py-1 text-xs';
 

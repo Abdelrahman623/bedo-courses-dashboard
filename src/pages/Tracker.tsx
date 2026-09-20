@@ -12,6 +12,7 @@ import { Modal } from '../components/ui/Modal';
 import { useSessionStore, type TimerMode } from '../store/sessionStore';
 import { useRoadmapStore } from '../store/roadmapStore';
 import { hhmm, minsToHHMM, getAccentColor } from '../lib/utils';
+import { getThemeColors } from '../lib/themes';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -89,7 +90,6 @@ export const Tracker: React.FC = () => {
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await logManualSession({
-      user_id: 'local',
       start_time: `${manualForm.date}T09:00:00Z`,
       end_time: `${manualForm.date}T09:30:00Z`,
       duration_mins: Number(manualForm.duration_mins),
@@ -174,7 +174,7 @@ export const Tracker: React.FC = () => {
                     cy="110"
                     r="96"
                     fill="none"
-                    stroke={timerMode === 'pomodoro' ? getAccentColor() : '#00C896'}
+                    stroke={timerMode === 'pomodoro' ? getAccentColor() : getThemeColors().secondary}
                     strokeWidth="6"
                     strokeLinecap="round"
                     strokeDasharray={2 * Math.PI * 96}
@@ -192,7 +192,7 @@ export const Tracker: React.FC = () => {
                     <span
                       className={`w-2 h-2 rounded-full ${
                         timerRunning
-                          ? 'bg-[#00C896] animate-pulse'
+                          ? 'bg-accent-secondary animate-pulse'
                           : 'bg-zinc-600'
                       }`}
                     />
@@ -220,7 +220,7 @@ export const Tracker: React.FC = () => {
                 <Button
                   variant="secondary"
                   size="md"
-                  className="px-6 font-semibold border-amber-500/30 text-accent-amber"
+                  className="px-6 font-semibold border-accent-amber/30 text-accent-amber"
                   icon={<Pause size={15} />}
                   onClick={() => pauseTimer()}
                 >
@@ -315,7 +315,7 @@ export const Tracker: React.FC = () => {
           <Card padding="p-4" hover={false}>
             <div className="flex items-center justify-between text-xs mb-2">
               <div className="flex items-center gap-1.5 font-medium text-white">
-                <Target size={14} className="text-[#00C896]" />
+                <Target size={14} className="text-accent-secondary" />
                 <span>Weekly Mastery Goal</span>
               </div>
               <span className="font-mono text-zinc-300 font-semibold">
@@ -324,7 +324,7 @@ export const Tracker: React.FC = () => {
             </div>
             <div className="w-full bg-white/[0.06] h-2 rounded-full overflow-hidden">
               <div
-                className="h-full bg-[#00C896] rounded-full transition-all duration-500"
+                className="h-full bg-accent-secondary rounded-full transition-all duration-500"
                 style={{ width: `${goalPct}%` }}
               />
             </div>

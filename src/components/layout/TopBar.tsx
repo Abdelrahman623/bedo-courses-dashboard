@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Bell, LogOut, Sparkles, Flame, Target, Compass, FileText, CheckCheck, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,7 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useSessionStore } from '../../store/sessionStore';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import { useNotesStore } from '../../store/notesStore';
-import { storage } from '../../lib/storage';
+import { loadUserState, queueUserState } from '../../lib/userState';
 
 const PAGE_TITLES: Record<string, string> = {
   '/':          'Overview',
@@ -32,7 +32,7 @@ interface NotificationItem {
 export const TopBar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, isDemo, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const { currentStreak, weeklyMins } = useSessionStore();
   const { localNodes } = useRoadmapStore();
   const { notes } = useNotesStore();
@@ -40,9 +40,26 @@ export const TopBar: React.FC = () => {
   const [showMenu, setShowMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Persistent read and dismissed state
-  const [readIds, setReadIds] = useState<string[]>(() => storage.get<string[]>('read_notifications', []));
-  const [dismissedIds, setDismissedIds] = useState<string[]>(() => storage.get<string[]>('dismissed_notifications', []));
+  // Read / dismissed state belongs to the account, not the browser, so it
+  // follows you to another device instead of resetting. Stored under the
+  // `notifications` key in public.user_state.
+  const [readIds, setReadIds] = useState<string[]>([]);
+  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    loadUserState<{ read: string[]; dismissed: string[] }>('notifications', { read: [], dismissed: [] })
+      .then(state => {
+        if (!alive) return;
+        setReadIds(state.read ?? []);
+        setDismissedIds(state.dismissed ?? []);
+      });
+    return () => { alive = false; };
+  }, [user?.id]);
+
+  const persistNotifications = (read: string[], dismissed: string[]) => {
+    queueUserState('notifications', { read, dismissed });
+  };
 
   const title = PAGE_TITLES[location.pathname] || 'Dashboard';
   const now = new Date();
@@ -67,8 +84,8 @@ export const TopBar: React.FC = () => {
         description: 'Keep your learning momentum going by completing a focus block today.',
         time: todayStr,
         category: 'Study Streak',
-        icon: <Flame size={14} className="text-accent-amber" />,
-        iconBg: 'bg-accent-amber/15 border-accent-amber/20',
+        icon: <Flame size={14} className="text-accent-highlight" />,
+        iconBg: 'bg-accent-highlight/15 border-accent-highlight/20',
         path: '/tracker',
       });
     } else {
@@ -79,7 +96,7 @@ export const TopBar: React.FC = () => {
         time: todayStr,
         category: 'Habit',
         icon: <Flame size={14} className="text-zinc-400" />,
-        iconBg: 'bg-white/[0.06] border-white/8',
+        iconBg: 'bg-white/[0.06] border-white/[0.08]',
         path: '/tracker',
       });
     }
@@ -96,8 +113,8 @@ export const TopBar: React.FC = () => {
         : `${(Math.max(0, weeklyTarget - weeklyHours)).toFixed(1)}h remaining to hit your target.`,
       time: 'This Week',
       category: 'Target',
-      icon: <Target size={14} className="text-emerald-400" />,
-      iconBg: 'bg-emerald-500/15 border-emerald-500/20',
+      icon: <Target size={14} className="text-accent-secondary" />,
+      iconBg: 'bg-accent-secondary/15 border-accent-secondary/20',
       path: '/analytics',
     });
 
@@ -109,8 +126,8 @@ export const TopBar: React.FC = () => {
         description: 'Choose Web Dev, AI, Data, Cyber, or create your custom curriculum.',
         time: 'Get Started',
         category: 'Roadmap',
-        icon: <Compass size={14} className="text-sky-400" />,
-        iconBg: 'bg-sky-500/15 border-sky-500/20',
+        icon: <Compass size={14} className="text-accent-tertiary" />,
+        iconBg: 'bg-accent-tertiary/15 border-accent-tertiary/20',
         path: '/courses',
       });
     } else {
@@ -121,8 +138,8 @@ export const TopBar: React.FC = () => {
         description: 'View your visual roadmap milestones and curriculum progression.',
         time: 'Active Path',
         category: 'Roadmap',
-        icon: <Compass size={14} className="text-sky-400" />,
-        iconBg: 'bg-sky-500/15 border-sky-500/20',
+        icon: <Compass size={14} className="text-accent-tertiary" />,
+        iconBg: 'bg-accent-tertiary/15 border-accent-tertiary/20',
         path: '/courses',
       });
     }
@@ -135,8 +152,8 @@ export const TopBar: React.FC = () => {
         description: 'All your course notes and code snippets are organized and linked.',
         time: 'Notes',
         category: 'Knowledge',
-        icon: <FileText size={14} className="text-purple-400" />,
-        iconBg: 'bg-purple-500/15 border-purple-500/20',
+        icon: <FileText size={14} className="text-accent-amber" />,
+        iconBg: 'bg-accent-amber/15 border-accent-amber/20',
         path: '/notes',
       });
     } else {
@@ -146,8 +163,8 @@ export const TopBar: React.FC = () => {
         description: 'Take markdown notes in the editor and link them directly to milestones.',
         time: 'Quick Tip',
         category: 'Notes',
-        icon: <FileText size={14} className="text-purple-400" />,
-        iconBg: 'bg-purple-500/15 border-purple-500/20',
+        icon: <FileText size={14} className="text-accent-amber" />,
+        iconBg: 'bg-accent-amber/15 border-accent-amber/20',
         path: '/notes',
       });
     }
@@ -167,34 +184,33 @@ export const TopBar: React.FC = () => {
     const allIds = visibleNotifications.map(n => n.id);
     const updated = Array.from(new Set([...readIds, ...allIds]));
     setReadIds(updated);
-    storage.set('read_notifications', updated);
+    persistNotifications(updated, dismissedIds);
   };
 
   const handleDismiss = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const updated = Array.from(new Set([...dismissedIds, id]));
     setDismissedIds(updated);
-    storage.set('dismissed_notifications', updated);
+    persistNotifications(readIds, updated);
   };
 
   const handleClearAll = () => {
     const allIds = allNotifications.map(n => n.id);
     setDismissedIds(allIds);
-    storage.set('dismissed_notifications', allIds);
+    persistNotifications(readIds, allIds);
   };
 
   const handleResetNotifications = () => {
     setDismissedIds([]);
     setReadIds([]);
-    storage.remove('dismissed_notifications');
-    storage.remove('read_notifications');
+    persistNotifications([], []);
   };
 
   const handleNotificationClick = (item: NotificationItem) => {
     if (!readIds.includes(item.id)) {
       const updated = [...readIds, item.id];
       setReadIds(updated);
-      storage.set('read_notifications', updated);
+      persistNotifications(updated, dismissedIds);
     }
     setShowNotifications(false);
     navigate(item.path);
@@ -207,11 +223,6 @@ export const TopBar: React.FC = () => {
         <h1 className="font-semibold text-white text-sm tracking-tight">{title}</h1>
         <span className="text-zinc-600 text-xs">/</span>
         <span className="text-xs font-mono text-zinc-400">{dateStr}</span>
-        {isDemo && (
-          <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-accent-amber/10 text-accent-amber border border-accent-amber/20">
-            <Sparkles size={10} /> Demo Session
-          </span>
-        )}
       </div>
 
       {/* Actions */}
@@ -232,9 +243,9 @@ export const TopBar: React.FC = () => {
             title="Notifications & Updates"
             aria-label="Notifications"
           >
-            <Bell size={16} className={unreadCount > 0 ? 'text-accent-amber' : ''} />
+            <Bell size={16} className={unreadCount > 0 ? 'text-accent-highlight' : ''} />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-accent-amber animate-pulse shadow-[0_0_8px_rgba(240,165,0,0.6)]" />
+              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-accent-highlight animate-pulse shadow-[0_0_8px_rgb(var(--c-highlight)/0.6)]" />
             )}
           </button>
 
@@ -256,11 +267,11 @@ export const TopBar: React.FC = () => {
                   <div className="p-3.5 flex items-center justify-between bg-[#161B28]">
                     <div className="flex items-center gap-2">
                       <h3 className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-                        <Bell size={13} className="text-accent-amber" />
+                        <Bell size={13} className="text-accent-highlight" />
                         <span>Notifications</span>
                       </h3>
                       {unreadCount > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-accent-amber/15 text-accent-amber border border-accent-amber/25 font-mono font-bold">
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-accent-highlight/15 text-accent-highlight border border-accent-highlight/25 font-mono font-bold">
                           {unreadCount} new
                         </span>
                       )}
@@ -315,7 +326,7 @@ export const TopBar: React.FC = () => {
                             {/* Status indicator / Dismiss */}
                             <div className="flex flex-col items-end gap-1 flex-shrink-0">
                               {!isRead && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-accent-amber mt-1" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-accent-highlight mt-1" />
                               )}
                               <button
                                 onClick={(e) => handleDismiss(item.id, e)}

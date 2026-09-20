@@ -1,9 +1,25 @@
 import { create } from 'zustand';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { storage, getActiveUserId } from '../lib/storage';
+import { getActiveUserId } from '../lib/storage';
+import { loadUserState, queueUserState } from '../lib/userState';
 import type { Course, Topic, Roadmap, TopicStatus, RoadmapNode, RoadmapEdge } from '../types';
 import { ROADMAP_TEMPLATES, type RoadmapTemplate } from '../data/roadmapTemplates';
 import { slugify, safeUrl } from '../lib/utils';
+
+/** Shape of the `roadmap_canvas` row in public.user_state. */
+interface RoadmapCanvas {
+  nodes: RoadmapNode[];
+  edges: RoadmapEdge[];
+  activeTemplateId: string | null;
+  customTemplates: Record<string, RoadmapTemplate>;
+}
+
+const EMPTY_CANVAS: RoadmapCanvas = {
+  nodes: [],
+  edges: [],
+  activeTemplateId: null,
+  customTemplates: {},
+};
 
 interface RoadmapState {
   roadmaps: Roadmap[];
@@ -16,15 +32,15 @@ interface RoadmapState {
   customTemplates: Record<string, RoadmapTemplate>;
 
   fetchAll: () => Promise<void>;
+  persistCanvas: () => void;
   updateTopicStatus: (id: string, status: TopicStatus) => Promise<void>;
-  /** Async — adds to canvas AND to the linked course's topic list (Supabase + localStorage) */
   addTopic: (topic: {
     label: string;
     phase: string;
     status?: TopicStatus;
     parentId?: string;
     description?: string;
-    courseId?: string; // explicit course override; auto-resolved if omitted
+    courseId?: string;
   }) => Promise<{ nodeId: string; courseId: string | null }>;
   deleteTopic: (id: string) => void;
   updateTopic: (id: string, changes: Partial<RoadmapNode>) => void;
@@ -41,64 +57,69 @@ interface RoadmapState {
   deleteCustomTemplate: (templateId: string) => void;
   resetLocalRoadmap: () => void;
   setLocalTopicStatus: (id: string, status: TopicStatus) => void;
-  /** Returns the course_id that best matches the active roadmap template or first in_progress course */
   getActiveCourseId: () => string | null;
 
-  addCourse: (course: Omit<Course, 'id' | 'created_at'>) => Promise<void>;
+  addCourse: (course: Omit<Course, 'id' | 'created_at' | 'user_id'>) => Promise<void>;
   deleteCourse: (id: string) => Promise<void>;
   addTemplateAsCourse: (templateKey: string) => Promise<Course>;
 }
 
-const getInitialNodes = (): RoadmapNode[] => {
-  const cached = storage.get<RoadmapNode[] | null>('local_nodes', null);
-  return cached || [];
-};
-
-const getInitialEdges = (): RoadmapEdge[] => {
-  const cachedNodes = storage.get<RoadmapNode[] | null>('local_nodes', null);
-  if (!cachedNodes || cachedNodes.length === 0) {
-    return [];
-  }
-  return storage.get<RoadmapEdge[]>('local_edges', []);
-};
-
+// The canvas (`localNodes` / `localEdges`) used to live only in this browser's
+// localStorage, with no owner at all — which is why a brand-new account could
+// open the roadmap and find a 72-topic curriculum already sitting there, left
+// behind by whoever used the browser last. It now loads from, and saves to,
+// public.user_state under the signed-in account. The `local*` names are kept
+// so the rest of the app doesn't have to change.
 export const useRoadmapStore = create<RoadmapState>((set, get) => ({
-  roadmaps: storage.get<Roadmap[]>('roadmaps', []),
-  courses: storage.get<Course[]>('courses', []),
-  topics: storage.get<Topic[]>('topics', []),
+  roadmaps: [],
+  courses: [],
+  topics: [],
   loading: false,
-  localNodes: getInitialNodes(),
-  localEdges: getInitialEdges(),
-  activeTemplateId: storage.get<string | null>('active_template_id', null),
-  customTemplates: storage.get<Record<string, RoadmapTemplate>>('custom_templates', {}),
+  localNodes: [],
+  localEdges: [],
+  activeTemplateId: null,
+  customTemplates: {},
+
+  /** Debounced save of the whole canvas to the account. */
+  persistCanvas: () => {
+    const { localNodes, localEdges, activeTemplateId, customTemplates } = get();
+    queueUserState<RoadmapCanvas>('roadmap_canvas', {
+      nodes: localNodes,
+      edges: localEdges,
+      activeTemplateId,
+      customTemplates,
+    });
+  },
 
   fetchAll: async () => {
     if (!isSupabaseConfigured) return;
     set({ loading: true });
     try {
       const userId = await getActiveUserId();
-      if (userId === 'local') return;
+      if (!userId) {
+        set({ ...EMPTY_CANVAS, roadmaps: [], courses: [], topics: [], localNodes: [], localEdges: [], loading: false });
+        return;
+      }
 
-      const [{ data: roadmaps }, { data: courses }, { data: topics }] = await Promise.all([
+      const [{ data: roadmaps }, { data: courses }, { data: topics }, canvas] = await Promise.all([
         supabase.from('roadmaps').select('*').eq('user_id', userId).order('created_at'),
         supabase.from('courses').select('*').eq('user_id', userId).order('created_at'),
+        // Row Level Security scopes topics to this user's courses automatically.
         supabase.from('topics').select('*').order('created_at'),
+        loadUserState<RoadmapCanvas>('roadmap_canvas', EMPTY_CANVAS),
       ]);
 
-      if (roadmaps) {
-        set({ roadmaps });
-        storage.set('roadmaps', roadmaps);
-      }
-      if (courses) {
-        set({ courses });
-        storage.set('courses', courses);
-      }
-      if (topics) {
-        set({ topics });
-        storage.set('topics', topics);
-      }
+      set({
+        roadmaps: (roadmaps as Roadmap[]) ?? [],
+        courses: (courses as Course[]) ?? [],
+        topics: (topics as Topic[]) ?? [],
+        localNodes: canvas.nodes ?? [],
+        localEdges: canvas.edges ?? [],
+        activeTemplateId: canvas.activeTemplateId ?? null,
+        customTemplates: canvas.customTemplates ?? {},
+      });
     } catch (err) {
-      console.warn('[RoadmapStore] Cloud sync note: using cached roadmap data', err);
+      console.warn('[RoadmapStore] Fetch failed:', err);
     } finally {
       set({ loading: false });
     }
@@ -108,24 +129,27 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
     get().setLocalTopicStatus(id, status);
 
     if (isSupabaseConfigured) {
-      try {
-        await supabase.from('topics').update({ status }).eq('id', id);
-      } catch (err) {
-        console.warn('[RoadmapStore] Topic update sync failed:', err);
-      }
+      const { error } = await supabase.from('topics').update({ status }).eq('id', id);
+      if (error) console.warn('[RoadmapStore] Topic status sync failed:', error.message);
     }
   },
 
   setLocalTopicStatus: (id, status) => {
-    const updated = get().localNodes.map((n) => (n.id === id ? { ...n, status } : n));
-    set({ localNodes: updated });
-    storage.set('local_nodes', updated);
+    set({ localNodes: get().localNodes.map(n => (n.id === id ? { ...n, status } : n)) });
+
+    // Keep the `topics` list (used for notes-linking and course lookups) in
+    // step with the canvas rather than letting the two drift apart.
+    const { topics } = get();
+    if (topics.some(t => t.id === id)) {
+      set({ topics: topics.map(t => (t.id === id ? { ...t, status } : t)) });
+    }
+
+    get().persistCanvas();
   },
 
   getActiveCourseId: () => {
     const { courses, activeTemplateId, customTemplates } = get();
     if (!courses.length) return null;
-    // Prefer the course whose title / roadmap_id matches the active template
     if (activeTemplateId) {
       const allTemplates = { ...ROADMAP_TEMPLATES, ...customTemplates };
       const tplMatch = courses.find(
@@ -134,7 +158,6 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       );
       if (tplMatch) return tplMatch.id;
     }
-    // Fall back to first in_progress course, then first course
     return (courses.find(c => c.status === 'in_progress') ?? courses[0]).id;
   },
 
@@ -146,7 +169,6 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       cleanLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') +
       '_' + Date.now().toString(36).slice(-4);
 
-    // ── 1. Update the D3 canvas (localNodes / localEdges) ──────────────────
     const newNode: RoadmapNode = {
       id: nodeId,
       label: cleanLabel,
@@ -154,16 +176,15 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       status,
       description,
     };
-    const newNodes = [...get().localNodes, newNode];
-    const newEdges = parentId
-      ? [...get().localEdges, { source: parentId, target: nodeId }]
-      : [...get().localEdges];
 
-    set({ localNodes: newNodes, localEdges: newEdges });
-    storage.set('local_nodes', newNodes);
-    storage.set('local_edges', newEdges);
+    set({
+      localNodes: [...get().localNodes, newNode],
+      localEdges: parentId
+        ? [...get().localEdges, { source: parentId, target: nodeId }]
+        : get().localEdges,
+    });
+    get().persistCanvas();
 
-    // ── 2. Resolve the linked course ────────────────────────────────────────
     const resolvedCourseId = courseId ?? get().getActiveCourseId();
 
     if (resolvedCourseId) {
@@ -180,26 +201,19 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
         created_at: now,
       };
 
-      // Persist to localStorage topics
-      const updatedTopics = [...get().topics, topicRecord];
-      set({ topics: updatedTopics });
-      storage.set('topics', updatedTopics);
+      set({ topics: [...get().topics, topicRecord] });
 
-      // Persist to Supabase if configured
-      if (isSupabaseConfigured && userId !== 'local') {
-        try {
-          await supabase.from('topics').insert({
-            id: topicRecord.id,
-            course_id: topicRecord.course_id,
-            title: topicRecord.title,
-            phase: topicRecord.phase,
-            status: topicRecord.status,
-            parent_topic_id: topicRecord.parent_topic_id ?? null,
-            created_at: topicRecord.created_at,
-          });
-        } catch (err) {
-          console.warn('[RoadmapStore] Topic DB insert failed (canvas still updated):', err);
-        }
+      if (isSupabaseConfigured && userId) {
+        const { error } = await supabase.from('topics').insert({
+          id: topicRecord.id,
+          course_id: topicRecord.course_id,
+          title: topicRecord.title,
+          phase: topicRecord.phase,
+          status: topicRecord.status,
+          parent_topic_id: topicRecord.parent_topic_id ?? null,
+          created_at: topicRecord.created_at,
+        });
+        if (error) console.warn('[RoadmapStore] Topic insert failed:', error.message);
       }
     }
 
@@ -207,50 +221,46 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   },
 
   deleteTopic: (id) => {
-    const newNodes = get().localNodes.filter(n => n.id !== id);
-    const newEdges = get().localEdges.filter(e => e.source !== id && e.target !== id);
+    set({
+      localNodes: get().localNodes.filter(n => n.id !== id),
+      localEdges: get().localEdges.filter(e => e.source !== id && e.target !== id),
+    });
+    get().persistCanvas();
 
-    set({ localNodes: newNodes, localEdges: newEdges });
-    storage.set('local_nodes', newNodes);
-    storage.set('local_edges', newEdges);
+    if (isSupabaseConfigured) {
+      void supabase.from('topics').delete().eq('id', id);
+    }
+    set({ topics: get().topics.filter(t => t.id !== id) });
   },
 
   updateTopic: (id, changes) => {
-    const newNodes = get().localNodes.map(n => n.id === id ? { ...n, ...changes } : n);
-    set({ localNodes: newNodes });
-    storage.set('local_nodes', newNodes);
+    set({ localNodes: get().localNodes.map(n => (n.id === id ? { ...n, ...changes } : n)) });
+    get().persistCanvas();
   },
 
   loadTemplate: (templateKey) => {
     const tpl = get().customTemplates[templateKey] || ROADMAP_TEMPLATES[templateKey];
     if (!tpl) return;
 
-    const copiedNodes = tpl.nodes.map(n => ({ ...n }));
-    const copiedEdges = tpl.edges.map(e => ({ ...e }));
-
-    set({ localNodes: copiedNodes, localEdges: copiedEdges, activeTemplateId: templateKey });
-    storage.set('local_nodes', copiedNodes);
-    storage.set('local_edges', copiedEdges);
-    storage.set('active_template_id', templateKey);
+    set({
+      localNodes: tpl.nodes.map(n => ({ ...n })),
+      localEdges: tpl.edges.map(e => ({ ...e })),
+      activeTemplateId: templateKey,
+    });
+    get().persistCanvas();
   },
 
   clearRoadmap: () => {
     set({ localNodes: [], localEdges: [], activeTemplateId: null });
-    storage.set('local_nodes', []);
-    storage.set('local_edges', []);
-    storage.set('active_template_id', null);
+    get().persistCanvas();
   },
 
   deleteCustomTemplate: (templateId) => {
     const updated = { ...get().customTemplates };
     delete updated[templateId];
     set({ customTemplates: updated });
-    storage.set('custom_templates', updated);
-
-    if (get().activeTemplateId === templateId) {
-      set({ activeTemplateId: null });
-      storage.set('active_template_id', null);
-    }
+    if (get().activeTemplateId === templateId) set({ activeTemplateId: null });
+    get().persistCanvas();
   },
 
   importRoadmap: async ({
@@ -266,10 +276,7 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
 
     const sanitizedNodes: RoadmapNode[] = nodes.map(n => ({
       ...n,
-      resources: n.resources?.map(r => ({
-        ...r,
-        url: safeUrl(r.url),
-      })),
+      resources: n.resources?.map(r => ({ ...r, url: safeUrl(r.url) })),
     }));
 
     const customTpl: RoadmapTemplate = {
@@ -284,17 +291,13 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       edges,
     };
 
-    const updatedCustom = { ...get().customTemplates, [templateId]: customTpl };
     set({
-      customTemplates: updatedCustom,
+      customTemplates: { ...get().customTemplates, [templateId]: customTpl },
       localNodes: sanitizedNodes,
       localEdges: edges,
       activeTemplateId: templateId,
     });
-    storage.set('custom_templates', updatedCustom);
-    storage.set('local_nodes', sanitizedNodes);
-    storage.set('local_edges', edges);
-    storage.set('active_template_id', templateId);
+    get().persistCanvas();
 
     let createdCourse: Course | undefined;
     if (enrollAsCourse) {
@@ -305,45 +308,41 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   },
 
   resetLocalRoadmap: () => {
-    const reset = get().localNodes.map((n) => ({ ...n, status: 'not_started' as TopicStatus }));
-    set({ localNodes: reset });
-    storage.set('local_nodes', reset);
+    set({ localNodes: get().localNodes.map(n => ({ ...n, status: 'not_started' as TopicStatus })) });
+    get().persistCanvas();
   },
 
   addCourse: async (course) => {
     const userId = await getActiveUserId();
-    const now = new Date().toISOString();
+    if (!userId) return;
+
     const newCourse: Course = {
       ...course,
       id: crypto.randomUUID ? crypto.randomUUID() : `course_${Date.now()}`,
       user_id: userId,
-      created_at: now,
+      created_at: new Date().toISOString(),
     };
 
-    const updated = [newCourse, ...get().courses];
-    set({ courses: updated });
-    storage.set('courses', updated);
+    const previous = get().courses;
+    set({ courses: [newCourse, ...previous] });
 
-    if (isSupabaseConfigured && userId !== 'local') {
-      try {
-        await supabase.from('courses').insert(newCourse);
-      } catch (err) {
-        console.warn('[RoadmapStore] Course insert sync failed:', err);
-      }
+    const { error } = await supabase.from('courses').insert(newCourse);
+    if (error) {
+      console.warn('[RoadmapStore] Course insert failed, rolling back:', error.message);
+      set({ courses: previous });
     }
   },
 
   deleteCourse: async (id) => {
-    const updated = get().courses.filter(c => c.id !== id);
-    set({ courses: updated });
-    storage.set('courses', updated);
+    const previous = get().courses;
+    set({ courses: previous.filter(c => c.id !== id) });
 
-    if (isSupabaseConfigured) {
-      try {
-        await supabase.from('courses').delete().eq('id', id);
-      } catch (err) {
-        console.warn('[RoadmapStore] Course delete sync failed:', err);
-      }
+    const { error } = await supabase.from('courses').delete().eq('id', id);
+    if (error) {
+      console.warn('[RoadmapStore] Course delete failed, rolling back:', error.message);
+      set({ courses: previous });
+    } else {
+      set({ topics: get().topics.filter(t => t.course_id !== id) });
     }
   },
 
@@ -356,11 +355,11 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       c.title.toLowerCase() === tpl.name.toLowerCase() ||
       (tpl.roadmapUrl && c.source_url === tpl.roadmapUrl)
     );
-    if (existing) {
-      return existing;
-    }
+    if (existing) return existing;
 
     const userId = await getActiveUserId();
+    if (!userId) throw new Error('You need to be signed in to start a roadmap.');
+
     const now = new Date().toISOString();
     const newCourse: Course = {
       id: crypto.randomUUID ? crypto.randomUUID() : `course_${Date.now()}`,
@@ -373,11 +372,6 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       created_at: now,
     };
 
-    const updatedCourses = [newCourse, ...get().courses];
-    set({ courses: updatedCourses });
-    storage.set('courses', updatedCourses);
-
-    // Also populate topics table for this course so topics are tracked in database & analytics!
     const newTopics: Topic[] = tpl.nodes.map(n => ({
       id: n.id,
       course_id: newCourse.id,
@@ -386,19 +380,15 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       status: n.status,
       created_at: now,
     }));
-    const updatedTopics = [...get().topics, ...newTopics];
-    set({ topics: updatedTopics });
-    storage.set('topics', updatedTopics);
 
-    if (isSupabaseConfigured && userId !== 'local') {
-      try {
-        await supabase.from('courses').insert(newCourse);
-        if (newTopics.length > 0) {
-          await supabase.from('topics').insert(newTopics);
-        }
-      } catch (err) {
-        console.warn('[RoadmapStore] Course/topics insert sync failed:', err);
-      }
+    set({ courses: [newCourse, ...get().courses], topics: [...get().topics, ...newTopics] });
+
+    const { error: courseErr } = await supabase.from('courses').insert(newCourse);
+    if (courseErr) {
+      console.warn('[RoadmapStore] Course insert failed:', courseErr.message);
+    } else if (newTopics.length > 0) {
+      const { error: topicErr } = await supabase.from('topics').insert(newTopics);
+      if (topicErr) console.warn('[RoadmapStore] Topics insert failed:', topicErr.message);
     }
 
     return newCourse;

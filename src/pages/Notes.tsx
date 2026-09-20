@@ -347,7 +347,7 @@ const Notes: React.FC = () => {
                   className={[
                     'group relative px-3 py-2.5 cursor-pointer transition-colors',
                     isActive
-                    ? 'bg-white/[0.045] border-l-2 border-accent-amber shadow-[inset_0_0_20px_rgba(240,165,0,0.025)]'
+                    ? 'bg-white/[0.045] border-l-2 border-accent-amber shadow-[inset_0_0_20px_rgb(var(--c-primary)/0.03)]'
                     : 'border-l-2 border-transparent hover:bg-white/[0.025]'
                   ].join(' ')}
                 >
@@ -386,7 +386,7 @@ const Notes: React.FC = () => {
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); setDeleteModal(note.id); }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-txt-muted hover:text-accent-coral"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-txt-muted hover:text-rose-400"
                     >
                       <Trash2 size={12} />
                     </button>
@@ -481,7 +481,7 @@ const Notes: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <FileText
                     size={20}
-                    className="flex-shrink-0 text-sky-400"
+                    className="flex-shrink-0 text-accent-tertiary"
                   />
 
                   <input
@@ -584,7 +584,7 @@ const Notes: React.FC = () => {
                     className="
                       group flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full
                       bg-accent-amber/10 text-accent-amber border border-accent-amber/20
-                      hover:bg-accent-coral/10 hover:text-accent-coral hover:border-accent-coral/20
+                      hover:bg-rose-500/10 hover:text-rose-400 hover:border-rose-500/20
                       transition-colors
                     "
                     title="Click to remove"
@@ -648,10 +648,10 @@ const Notes: React.FC = () => {
                     className="flex items-center gap-1.5"
                   >
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-mint opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-mint" />
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-secondary opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-secondary" />
                     </span>
-                    <span className="text-[10px] text-accent-mint">Auto-saved</span>
+                    <span className="text-[10px] text-accent-secondary">Auto-saved</span>
                   </motion.div>
                 )}
               </AnimatePresence>

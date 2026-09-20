@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { clearAllUserData, themeCache } from '../lib/storage';
+import { resetAllStores } from '../lib/resetStores';
+import { loadUserState, flushUserState } from '../lib/userState';
+import { applyTheme } from '../lib/themes';
 import type { Profile } from '../types';
 
 interface AuthContextValue {
@@ -8,45 +12,22 @@ interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  isDemo: boolean;
   isAuthenticated: boolean;
+  /** Mirrors public.profiles.is_admin — set in Supabase, never by the client. */
+  isAdmin: boolean;
   isSupabaseConfigured: boolean;
-  signInDemo: () => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
-
-const DEMO_USER: User = {
-  id: 'local-bedo',
-  app_metadata: { provider: 'demo' },
-  user_metadata: { full_name: 'Bedo', name: 'Bedo' },
-  aud: 'authenticated',
-  created_at: new Date().toISOString(),
-  email: 'bedo@courses.local',
-  phone: '',
-  role: 'authenticated',
-  updated_at: new Date().toISOString(),
-};
-
-const DEMO_PROFILE: Profile = {
-  id: 'local-bedo',
-  name: 'Bedo',
-  username: 'bedo',
-  email: 'bedo@courses.local',
-  bio: 'Continuous learner',
-  weekly_goal_hours: 10,
-  created_at: new Date().toISOString(),
-};
 
 const AuthContext = createContext<AuthContextValue>({
   session: null,
   user: null,
   profile: null,
   loading: true,
-  isDemo: false,
   isAuthenticated: false,
+  isAdmin: false,
   isSupabaseConfigured: false,
-  signInDemo: () => {},
   signOut: async () => {},
   refreshProfile: async () => {},
 });
@@ -54,7 +35,6 @@ const AuthContext = createContext<AuthContextValue>({
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [isDemo, setIsDemo] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const purgedRef = useRef(false);
 
@@ -62,16 +42,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     purgedRef.current = true;
     setSession(null);
     setProfile(null);
-    setIsDemo(false);
-    localStorage.removeItem('bedo_demo_session');
-    localStorage.removeItem('bedo_sessions');
-    localStorage.removeItem('bedo_activity');
+    // Write out anything still waiting on a debounce before the session goes.
+    await flushUserState();
+    clearAllUserData();
+    resetAllStores();
     Object.keys(localStorage).forEach(k => {
-      if (k.startsWith('sb-') || k.includes('auth-token') || k.includes('demo_session')) {
+      if (k.startsWith('sb-') || k.includes('auth-token')) {
         localStorage.removeItem(k);
       }
     });
     try { await supabase.auth.signOut(); } catch { /* best-effort */ }
+  }, []);
+
+  /**
+   * The theme is a per-account preference stored in public.user_state, so it
+   * follows you to any device. The localStorage copy is only a paint hint used
+   * before this runs, to avoid a flash of the default colours.
+   */
+  const applyAccountTheme = useCallback(async () => {
+    const prefs = await loadUserState<{ theme?: string }>('preferences', {});
+    if (prefs.theme) {
+      applyTheme(prefs.theme);
+      themeCache.set(prefs.theme);
+    }
   }, []);
 
   const checkProfile = useCallback(async (u: User): Promise<boolean> => {
@@ -138,8 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (ok && !purgedRef.current) {
           setSession(sessionData.session);
-          setIsDemo(false);
-          localStorage.removeItem('bedo_demo_session');
+          await applyAccountTheme();
         }
         setLoading(false);
       } catch (err) {
@@ -181,8 +173,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (ok && !purgedRef.current) {
         setSession(currentSession);
-        setIsDemo(false);
-        localStorage.removeItem('bedo_demo_session');
+        await applyAccountTheme();
       }
       setLoading(false);
     });
@@ -218,20 +209,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subscription.unsubscribe();
       window.removeEventListener('focus', handleFocus);
     };
-  }, [checkProfile, purgeSession]);
-
-  const signInDemo = () => {
-    purgedRef.current = false;
-    localStorage.setItem('bedo_demo_session', 'true');
-    setIsDemo(true);
-    setProfile(DEMO_PROFILE);
-  };
+  }, [checkProfile, purgeSession, applyAccountTheme]);
 
   const signOut = async () => { await purgeSession(); };
 
-  const activeUser = session?.user ?? (isDemo ? DEMO_USER : null);
-  const activeProfile = profile ?? (isDemo ? DEMO_PROFILE : null);
-  const isAuthenticated = Boolean(session || isDemo);
+  const activeUser = session?.user ?? null;
+  const activeProfile = profile;
+  const isAuthenticated = Boolean(session);
+  // Admin is decided entirely by the database. Signed-out visitors are never
+  // admin, and even if this were forged client-side, every admin RPC and RLS policy
+  // re-checks it server-side (see supabase_admin_security.sql).
+  const isAdmin = Boolean(session && profile?.is_admin);
 
   return (
     <AuthContext.Provider
@@ -240,10 +228,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user: activeUser,
         profile: activeProfile,
         loading,
-        isDemo,
         isAuthenticated,
+        isAdmin,
         isSupabaseConfigured,
-        signInDemo,
         signOut,
         refreshProfile,
       }}

@@ -8,6 +8,7 @@ import { Card } from '../components/ui/Card';
 import { useSessionStore } from '../store/sessionStore';
 import { useRoadmapStore } from '../store/roadmapStore';
 import { minsToHHMM, pct, getAccentColor } from '../lib/utils';
+import { getThemeColors } from '../lib/themes';
 
 const chartStyle = {
   contentStyle: {
@@ -48,6 +49,7 @@ export const Analytics: React.FC = () => {
 
   // Live accent color — reads CSS variable so theme changes apply to charts
   const accent = getAccentColor();
+  const { secondary, tertiary } = getThemeColors();
 
   const totalTopics = localNodes.length;
   const completedTopics = localNodes.filter(n => n.status === 'completed').length;
@@ -104,7 +106,7 @@ export const Analytics: React.FC = () => {
           <div className="p-4">
             <span className="text-xs text-zinc-400 font-medium">Curriculum Covered</span>
             <div className="my-2 flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold font-mono text-white tabular-nums">
+              <span className="text-2xl font-bold font-mono text-accent-amber tabular-nums">
                 {overallPct}%
               </span>
               <span className="text-xs text-zinc-500 font-mono">({completedTopics}/{totalTopics})</span>
@@ -115,7 +117,7 @@ export const Analytics: React.FC = () => {
           <div className="p-4">
             <span className="text-xs text-zinc-400 font-medium">Total Study Logged</span>
             <div className="my-2 flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold font-mono text-accent-amber tabular-nums">
+              <span className="text-2xl font-bold font-mono text-accent-secondary tabular-nums">
                 {minsToHHMM(totalMins)}
               </span>
             </div>
@@ -125,7 +127,7 @@ export const Analytics: React.FC = () => {
           <div className="p-4">
             <span className="text-xs text-zinc-400 font-medium">Active Cadence</span>
             <div className="my-2 flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold font-mono text-[#00C896] tabular-nums">
+              <span className="text-2xl font-bold font-mono text-accent-highlight tabular-nums">
                 {currentStreak}
               </span>
               <span className="text-xs text-zinc-500">days streak</span>
@@ -136,7 +138,7 @@ export const Analytics: React.FC = () => {
           <div className="p-4">
             <span className="text-xs text-zinc-400 font-medium">Projected Completion</span>
             <div className="my-2 flex items-baseline gap-1.5">
-              <span className="text-lg font-bold font-mono text-white truncate">
+              <span className="text-lg font-bold font-mono text-accent-tertiary truncate">
                 {completionDate || 'Calculating...'}
               </span>
             </div>
@@ -195,7 +197,7 @@ export const Analytics: React.FC = () => {
                 <PolarGrid stroke={chartStyle.gridStroke} />
                 <PolarAngleAxis dataKey="subject" tick={{ fill: chartStyle.tickFill, fontSize: 10 }} />
                 <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#52525B" tick={false} axisLine={false} />
-                <Radar name="Coverage" dataKey="value" stroke="#00C896" fill="#00C896" fillOpacity={0.2} strokeWidth={2} />
+                <Radar name="Coverage" dataKey="value" stroke={secondary} fill={secondary} fillOpacity={0.2} strokeWidth={2} />
               </RadarChart>
             </ResponsiveContainer>
           </div>
@@ -221,7 +223,7 @@ export const Analytics: React.FC = () => {
                   {dayOfWeekData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={entry.sessions > 0 ? '#4FC3F7' : 'rgba(255,255,255,0.06)'}
+                      fill={entry.sessions > 0 ? tertiary : 'rgba(255,255,255,0.06)'}
                     />
                   ))}
                 </Bar>

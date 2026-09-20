@@ -9,9 +9,9 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variants = {
   primary:
-    'bg-accent-amber text-[#0D0F14] hover:bg-[#F5AF19] active:bg-[#D99400] font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.3),0_1px_2px_rgba(0,0,0,0.4)]',
+    'btn-accent-gradient text-[#0D0F14] font-semibold hover:brightness-110 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.28),0_1px_2px_rgba(0,0,0,0.4)]',
   mint:
-    'bg-[#00C896] text-[#0D0F14] hover:bg-[#00DBA5] active:bg-[#00B586] font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.3),0_1px_2px_rgba(0,0,0,0.4)]',
+    'bg-status-completed text-[#0D0F14] hover:brightness-110 font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.3),0_1px_2px_rgba(0,0,0,0.4)]',
   secondary:
     'bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.04] text-zinc-200 border border-white/[0.08] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]',
   ghost:

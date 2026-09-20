@@ -12,20 +12,15 @@ import { useNotesStore } from '../store/notesStore';
 import { useProjectsStore } from '../store/projectsStore';
 import { useSessionStore } from '../store/sessionStore';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { storage } from '../lib/storage';
+import { themeCache } from '../lib/storage';
+import { saveUserState } from '../lib/userState';
+import { ACCENT_THEMES, getActiveTheme, applyTheme } from '../lib/themes';
 
 type SettingsTab = 'profile' | 'appearance' | 'database' | 'backup' | 'users';
 
-const ACCENT_THEMES = [
-  { id: 'amber', name: 'Scholar Amber', hex: '#F0A500' },
-  { id: 'mint', name: 'Emerald Mint', hex: '#00C896' },
-  { id: 'sky', name: 'Electric Sky', hex: '#4FC3F7' },
-  { id: 'coral', name: 'Vibrant Coral', hex: '#FF6B6B' },
-  { id: 'violet', name: 'Royal Violet', hex: '#A78BFA' },
-];
 
 export const Settings: React.FC = () => {
-  const { user, profile, signOut, refreshProfile } = useAuth();
+  const { user, profile, signOut, refreshProfile, isAdmin } = useAuth();
   const { roadmaps, courses, topics, localNodes, resetLocalRoadmap } = useRoadmapStore();
   const { notes } = useNotesStore();
   const { projects } = useProjectsStore();
@@ -41,10 +36,10 @@ export const Settings: React.FC = () => {
     return profile?.username || user?.user_metadata?.username || 'bedo';
   });
   const [bio, setBio] = useState(() => {
-    return profile?.bio || storage.get('profile_bio', 'Continuous learner · Tracking my learning journey');
+    return profile?.bio ?? 'Continuous learner · Tracking my learning journey';
   });
   const [weeklyGoalHours, setWeeklyGoalHours] = useState(() => {
-    return profile?.weekly_goal_hours || storage.get('profile_weekly_goal', 10);
+    return profile?.weekly_goal_hours ?? 10;
   });
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
@@ -59,9 +54,14 @@ export const Settings: React.FC = () => {
     }
   }, [profile]);
 
+  // If admin access is revoked while the tab is open, bounce back to Profile.
+  useEffect(() => {
+    if (!isAdmin && activeTab === 'users') setActiveTab('profile');
+  }, [isAdmin, activeTab]);
+
   // Fetch all users when users tab is opened
   useEffect(() => {
-    if (activeTab === 'users' && isSupabaseConfigured) {
+    if (activeTab === 'users' && isSupabaseConfigured && isAdmin) {
       fetchAllUsers();
       setDeleteError(null);
       setDeleteSuccess(null);
@@ -69,9 +69,9 @@ export const Settings: React.FC = () => {
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Appearance State ────────────────────────────────────────────────────
-  const [currentAccent, setCurrentAccent] = useState(() => {
-    return storage.get('theme_accent', '#F0A500');
-  });
+  // Start from the theme that is actually applied (initTheme() ran before first render),
+  // so the picker can never disagree with what's on screen.
+  const [currentTheme, setCurrentTheme] = useState(() => getActiveTheme());
 
   // ── Database Diagnostic State ───────────────────────────────────────────
   const [pingStatus, setPingStatus] = useState<string | null>(null);
@@ -96,6 +96,7 @@ export const Settings: React.FC = () => {
     username: string;
     created_at: string;
     is_confirmed: boolean;
+    is_admin: boolean;
     notes_count: number;
     sessions_count: number;
     projects_count: number;
@@ -107,10 +108,38 @@ export const Settings: React.FC = () => {
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
 
   const fetchAllUsers = async () => {
+    // Client-side guard only — the real gate is in the database: list_all_users()
+    // raises "admin access required" for any non-admin caller, so a user who
+    // pokes at this from the console still gets nothing back.
+    if (!isAdmin) return;
     setUsersLoading(true);
     try {
       const { data, error } = await supabase.rpc('list_all_users');
-      if (!error && data) setAllUsers(data);
+      if (error) {
+        setDeleteError(error.message || 'Could not load users.');
+        setAllUsers([]);
+      } else if (data) {
+        setAllUsers(data);
+      }
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  const handleToggleAdmin = async (targetUserId: string, userName: string, makeAdmin: boolean) => {
+    setUsersLoading(true);
+    setDeleteError(null);
+    try {
+      const { data, error } = await supabase.rpc('set_user_admin', {
+        target_user_id: targetUserId,
+        make_admin: makeAdmin,
+      });
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data.error || 'Failed to update admin status.');
+      setDeleteSuccess(`"${userName}" is ${makeAdmin ? 'now an admin' : 'no longer an admin'}.`);
+      await fetchAllUsers();
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to update admin status.');
     } finally {
       setUsersLoading(false);
     }
@@ -201,38 +230,72 @@ export const Settings: React.FC = () => {
   };
 
 
-  const handleRestoreConfirm = () => {
-    if (!restoreData) return;
+  const handleRestoreConfirm = async () => {
+    if (!restoreData || !user) return;
     setRestoring(true);
+    setRestoreError(null);
     try {
-      const d = restoreData as { data?: { roadmaps?: unknown; courses?: unknown; topics?: unknown; localNodes?: unknown; notes?: unknown; projects?: unknown; sessions?: unknown; activity?: unknown } };
-      if (d.data?.roadmaps)   storage.set('roadmaps', d.data.roadmaps);
-      if (d.data?.courses)    storage.set('courses', d.data.courses);
-      if (d.data?.topics)     storage.set('topics', d.data.topics);
-      if (d.data?.localNodes) storage.set('localNodes', d.data.localNodes);
-      if (d.data?.notes)      storage.set('notes', d.data.notes);
-      if (d.data?.projects)   storage.set('projects', d.data.projects);
-      if (d.data?.sessions)   storage.set('sessions', d.data.sessions);
-      if (d.data?.activity)   storage.set('activity', d.data.activity);
-      setBackupMsg('✓ Backup restored successfully! Refreshing…');
+      const d = restoreData as {
+        data?: {
+          roadmaps?: unknown[]; courses?: unknown[]; topics?: unknown[];
+          localNodes?: unknown[]; localEdges?: unknown[];
+          notes?: unknown[]; projects?: unknown[]; sessions?: unknown[];
+        };
+      };
+
+      // Backups are restored INTO THE ACCOUNT now, not into this browser — so
+      // a restore shows up everywhere you sign in, and can't leak into whoever
+      // uses this device next. Rows are re-stamped with the current user id so
+      // a backup taken from another account still lands on yours.
+      const stamp = <T extends object>(rows: unknown[] | undefined): T[] =>
+        ((rows ?? []) as T[]).map(r => ({ ...r, user_id: user.id }));
+
+      const steps: Array<{ table: string; rows: object[] }> = [
+        { table: 'roadmaps', rows: stamp(d.data?.roadmaps) },
+        { table: 'courses',  rows: stamp(d.data?.courses) },
+        // topics have no user_id — they hang off their course
+        { table: 'topics',   rows: (d.data?.topics ?? []) as object[] },
+        { table: 'notes',    rows: stamp(d.data?.notes) },
+        { table: 'projects', rows: stamp(d.data?.projects) },
+        { table: 'sessions', rows: stamp(d.data?.sessions) },
+      ];
+
+      for (const step of steps) {
+        if (step.rows.length === 0) continue;
+        const { error } = await supabase.from(step.table).upsert(step.rows, { onConflict: 'id' });
+        if (error) throw new Error(`${step.table}: ${error.message}`);
+      }
+
+      if (d.data?.localNodes) {
+        await saveUserState('roadmap_canvas', {
+          nodes: d.data.localNodes,
+          edges: d.data.localEdges ?? [],
+          activeTemplateId: null,
+          customTemplates: {},
+        });
+      }
+
+      setBackupMsg('✓ Backup restored to your account! Refreshing…');
       setRestorePreview(null);
       setRestoreData(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       setTimeout(() => window.location.reload(), 1500);
-    } catch {
-      setRestoreError('Restore failed. The backup file may be corrupted.');
+    } catch (err: unknown) {
+      setRestoreError(err instanceof Error ? err.message : 'Restore failed. The backup file may be corrupted.');
     } finally {
       setRestoring(false);
     }
   };
 
 
-  const handleApplyAccent = (hex: string) => {
-    setCurrentAccent(hex);
-    storage.set('theme_accent', hex);
-    localStorage.setItem('theme_accent', hex);
-    document.documentElement.style.setProperty('--accent-amber', hex);
-    document.documentElement.style.setProperty('--accent-brand', hex);
+  const handleApplyAccent = (themeId: string) => {
+    const theme = applyTheme(themeId);
+    setCurrentTheme(theme);
+    // Saved to the account so the theme follows you to any device. The local
+    // copy is only a paint hint so the page doesn't flash default colours on
+    // the next load before the account's value arrives.
+    themeCache.set(theme.id);
+    void saveUserState('preferences', { theme: theme.id });
   };
 
   // Test live connection to Supabase
@@ -242,7 +305,7 @@ export const Settings: React.FC = () => {
     const start = performance.now();
     try {
       if (!isSupabaseConfigured) {
-        setPingStatus('Offline Demo Mode (Local Storage active)');
+        setPingStatus('Not connected — set your Supabase keys in .env');
         setPingLatency(null);
       } else {
         const { error } = await supabase.from('profiles').select('id').limit(1);
@@ -265,9 +328,6 @@ export const Settings: React.FC = () => {
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingProfile(true);
-    storage.set('profile_name', displayName);
-    storage.set('profile_bio', bio);
-    storage.set('profile_weekly_goal', weeklyGoalHours);
 
     if (isSupabaseConfigured && user) {
       try {
@@ -397,8 +457,10 @@ export const Settings: React.FC = () => {
               { id: 'appearance', label: 'Theme & Styling', icon: Palette },
               { id: 'database', label: 'Cloud Sync & Supabase', icon: Database },
               { id: 'backup', label: 'Backups & Storage', icon: HardDrive },
-              { id: 'users', label: 'User Management', icon: Users },
-            ] as const
+              // User Management is admin-only. `isAdmin` comes from
+              // public.profiles.is_admin in Supabase — see supabase_admin_security.sql.
+              ...(isAdmin ? [{ id: 'users' as const, label: 'User Management', icon: Users }] : []),
+            ] as ReadonlyArray<{ id: SettingsTab; label: string; icon: typeof User }>
           ).map(tab => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -467,7 +529,7 @@ export const Settings: React.FC = () => {
                   <input
                     type="text"
                     disabled
-                    value={user?.email || 'local-session@demo.internal'}
+                    value={user?.email || '—'}
                     className="w-full bg-[#0A0D14] border border-white/[0.05] rounded-lg px-3 py-2 text-sm text-zinc-500 font-mono cursor-not-allowed"
                   />
                   <p className="text-[10px] text-zinc-600 mt-1">Managed via Supabase Authentication</p>
@@ -532,33 +594,88 @@ export const Settings: React.FC = () => {
               <div className="space-y-6">
                 <div>
                   <label className="block text-xs font-medium text-zinc-400 mb-3">
-                    Primary Accent Color
+                    Theme Package
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {ACCENT_THEMES.map(t => {
-                      const isSelected = currentAccent === t.hex;
+                      const isSelected = currentTheme.id === t.id;
                       return (
                         <button
                           key={t.id}
                           type="button"
-                          onClick={() => handleApplyAccent(t.hex)}
+                          onClick={() => handleApplyAccent(t.id)}
                           className={`flex flex-col items-center p-3 rounded-xl border transition-all cursor-pointer select-none ${
                             isSelected
                               ? 'bg-white/[0.08] border-white/20 shadow-md'
                               : 'bg-[#0D1017] border-white/[0.06] hover:border-white/[0.12]'
                           }`}
                         >
+                          {/* Four-color swatch: primary · secondary · tertiary · highlight */}
                           <div
-                            className="w-7 h-7 rounded-full mb-2 flex items-center justify-center shadow-inner"
-                            style={{ backgroundColor: t.hex }}
+                            className="relative w-9 h-9 rounded-full mb-2 flex items-center justify-center shadow-inner overflow-hidden"
+                            style={{
+                              backgroundImage: `conic-gradient(from 45deg, ${t.primary} 0 25%, ${t.secondary} 0 50%, ${t.tertiary} 0 75%, ${t.highlight} 0 100%)`,
+                            }}
                           >
-                            {isSelected && <Check size={14} className="text-[#0D0F14] stroke-[3]" />}
+                            {isSelected && (
+                              <span className="w-5 h-5 rounded-full bg-[#0D0F14]/70 flex items-center justify-center">
+                                <Check size={12} className="text-white stroke-[3]" />
+                              </span>
+                            )}
                           </div>
                           <span className="text-xs font-semibold text-white">{t.name}</span>
-                          <span className="text-[10px] font-mono text-zinc-500 mt-0.5">{t.hex}</span>
+                          <span className="text-[10px] text-zinc-500 mt-0.5 text-center leading-tight">{t.tagline}</span>
+                          <span className="flex items-center gap-1 mt-2">
+                            {[t.primary, t.secondary, t.tertiary, t.highlight].map(c => (
+                              <span key={c} className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: c }} />
+                            ))}
+                          </span>
                         </button>
                       );
                     })}
+                  </div>
+                  <p className="text-[11px] text-zinc-500 mt-3">
+                    Each package is four colors chosen to work together. Gradients only ever shade one color;
+                    the other colors sit beside it, never blended into it.
+                  </p>
+                </div>
+
+                {/* Live preview — built from the same theme classes the app uses */}
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-3">
+                    Live Preview
+                  </label>
+                  <div className="bg-[#0A0D14] border border-white/[0.06] rounded-xl p-4 space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button variant="primary" size="sm">Primary action</Button>
+                      <Button variant="tonal" size="sm">Secondary</Button>
+                      <Button variant="tonalTertiary" size="sm">Tertiary</Button>
+                      <span className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-medium bg-accent-highlight/10 text-accent-highlight border border-accent-highlight/25">
+                        Highlight
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        {[
+                          { label: 'Primary',   bar: 'bg-accent-amber',     text: 'text-accent-amber',     w: '78%' },
+                          { label: 'Secondary', bar: 'bg-accent-secondary', text: 'text-accent-secondary', w: '56%' },
+                          { label: 'Tertiary',  bar: 'bg-accent-tertiary',  text: 'text-accent-tertiary',  w: '34%' },
+                        ].map(r => (
+                          <div key={r.label} className="flex items-center gap-3 text-[11px]">
+                            <span className={`w-16 font-medium ${r.text}`}>{r.label}</span>
+                            <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                              <div className={`h-full rounded-full ${r.bar}`} style={{ width: r.w }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-zinc-500 mr-1">Heatmap</span>
+                        {['bg-white/[0.06]', 'bg-accent-amber/20', 'bg-accent-amber/45', 'bg-accent-amber/70', 'bg-accent-amber'].map(c => (
+                          <span key={c} className={`w-4 h-4 rounded-[3px] ${c}`} />
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -597,7 +714,7 @@ export const Settings: React.FC = () => {
                   <div className="flex items-center gap-3">
                     <div
                       className={`w-3 h-3 rounded-full ${
-                        isSupabaseConfigured ? 'bg-[#00C896] animate-pulse' : 'bg-accent-amber'
+                        isSupabaseConfigured ? 'bg-status-completed animate-pulse' : 'bg-amber-400'
                       }`}
                     />
                     <div>
@@ -625,7 +742,7 @@ export const Settings: React.FC = () => {
                   <div className="p-3 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs font-mono text-zinc-300 flex items-center justify-between">
                     <span>{pingStatus}</span>
                     {pingLatency !== null && (
-                      <span className="text-[#00C896] font-semibold">{pingLatency} ms</span>
+                      <span className="text-status-completed font-semibold">{pingLatency} ms</span>
                     )}
                   </div>
                 )}
@@ -645,7 +762,7 @@ export const Settings: React.FC = () => {
                         className="bg-[#0A0D14] border border-white/[0.06] px-2.5 py-1.5 rounded flex items-center justify-between"
                       >
                         <span className="text-zinc-300">{table}</span>
-                        <Check size={12} className="text-[#00C896]" />
+                        <Check size={12} className="text-status-completed" />
                       </div>
                     ))}
                   </div>
@@ -799,7 +916,7 @@ export const Settings: React.FC = () => {
           )}
 
           {/* ── TAB 5: USER MANAGEMENT ─────────────────────────────── */}
-          {activeTab === 'users' && (
+          {activeTab === 'users' && isAdmin && (
             <Card hover={false} padding="p-6">
               <div className="pb-4 mb-5">
                 <h2 className="text-base font-semibold tracking-tight text-white flex items-center gap-2">
@@ -825,7 +942,7 @@ export const Settings: React.FC = () => {
 
                   {/* Ghost accounts warning banner */}
                   {allUsers.some(u => !u.is_confirmed) && (
-                    <div className="flex items-center justify-between p-3 bg-amber-500/8 border border-amber-500/20 rounded-xl">
+                    <div className="flex items-center justify-between p-3 bg-amber-500/[0.08] border border-amber-500/20 rounded-xl">
                       <div className="flex items-center gap-2">
                         <AlertTriangle size={14} className="text-amber-400 flex-shrink-0" />
                         <div>
@@ -867,7 +984,7 @@ export const Settings: React.FC = () => {
                           key={u.user_id}
                           className={`flex items-center justify-between px-4 py-3 transition-colors ${
                             !u.is_confirmed
-                              ? 'bg-amber-500/5 hover:bg-amber-500/8'
+                              ? 'bg-amber-500/5 hover:bg-amber-500/[0.08]'
                               : 'bg-bg-surface/30 hover:bg-white/[0.03]'
                           }`}
                         >
@@ -889,6 +1006,11 @@ export const Settings: React.FC = () => {
                                 </p>
                                 {u.user_id === user?.id && (
                                   <span className="text-[10px] bg-accent-amber/10 text-accent-amber border border-accent-amber/20 px-1.5 py-0.5 rounded font-medium">You</span>
+                                )}
+                                {u.is_admin && (
+                                  <span className="text-[10px] bg-accent-secondary/10 text-accent-secondary border border-accent-secondary/25 px-1.5 py-0.5 rounded font-medium inline-flex items-center gap-1">
+                                    <Shield size={9} /> Admin
+                                  </span>
                                 )}
                                 {!u.is_confirmed && (
                                   <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded font-medium">
@@ -919,6 +1041,17 @@ export const Settings: React.FC = () => {
                                   onClick={() => handleConfirmUser(u.user_id, u.name || u.email)}
                                 >
                                   Confirm
+                                </Button>
+                              )}
+                              {u.user_id !== user?.id && (
+                                <Button
+                                  variant={u.is_admin ? 'secondary' : 'outline'}
+                                  size="sm"
+                                  icon={<Shield size={12} />}
+                                  loading={usersLoading}
+                                  onClick={() => handleToggleAdmin(u.user_id, u.name || u.email, !u.is_admin)}
+                                >
+                                  {u.is_admin ? 'Revoke admin' : 'Make admin'}
                                 </Button>
                               )}
                               <Button

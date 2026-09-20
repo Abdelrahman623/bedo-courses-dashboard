@@ -5,6 +5,7 @@ import type { RoadmapNode } from '../../types';
 import { SlideOver } from '../ui/SlideOver';
 import { Button } from '../ui/Button';
 import { getAccentColor, safeUrl } from '../../lib/utils';
+import { getPhasePalette, withAlpha, lighten, SEMANTIC } from '../../lib/themes';
 import {
   Trash2, Sparkles, BookOpen, Clock, Compass,
   ZoomIn, ZoomOut, Maximize2, LayoutGrid, Network,
@@ -12,29 +13,26 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-const PHASE_PALETTE = [
-  '#F0A500', '#00C896', '#4FC3F7', '#FF6B6B',
-  '#A78BFA', '#FB923C', '#E879F9', '#34D399',
-  '#38BDF8', '#F43F5E', '#10B981', '#6366F1'
-];
-
+// Phase colors are built from the active theme package (4 roles × base/light/dim),
+// so the roadmap re-colors with the theme. A phase name always hashes to the same slot.
 const getPhaseColor = (phase: string): string => {
-  if (!phase) return '#8A94A8';
+  if (!phase) return SEMANTIC.neutral;
+  const palette = getPhasePalette();
   let hash = 0;
   for (let i = 0; i < phase.length; i++) hash = phase.charCodeAt(i) + ((hash << 5) - hash);
-  const idx = Math.abs(hash) % PHASE_PALETTE.length;
-  return PHASE_PALETTE[idx];
+  return palette[Math.abs(hash) % palette.length];
 };
 
+// completed = semantic success (fixed) · in_progress = theme primary
 const getStatusBorderColor = (status: RoadmapNode['status']) => {
-  if (status === 'completed') return '#00C896';
+  if (status === 'completed') return SEMANTIC.success;
   if (status === 'in_progress') return getAccentColor();
   return 'rgba(255,255,255,0.12)';
 };
 
 const getStatusBgColor = (status: RoadmapNode['status']) => {
-  if (status === 'completed') return 'rgba(0, 200, 150, 0.08)';
-  if (status === 'in_progress') return 'rgba(240, 165, 0, 0.08)';
+  if (status === 'completed') return withAlpha(SEMANTIC.success, 0.08);
+  if (status === 'in_progress') return withAlpha(getAccentColor(), 0.08);
   return '#131722';
 };
 
@@ -199,7 +197,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
           .attr('font-size', '10px')
           .attr('font-family', 'Inter, system-ui, sans-serif')
           .attr('font-weight', '500')
-          .attr('fill', completedCount === items.length && items.length > 0 ? '#00C896' : '#71717A')
+          .attr('fill', completedCount === items.length && items.length > 0 ? SEMANTIC.success : '#71717A')
           .text(`${completedCount}/${items.length}`);
 
         items.forEach((node, rowIdx) => {
@@ -243,7 +241,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         g.append('path')
           .attr('d', pathD)
           .attr('fill', 'none')
-          .attr('stroke', isSourceCompleted ? 'rgba(0, 200, 150, 0.4)' : 'rgba(255,255,255,0.12)')
+          .attr('stroke', isSourceCompleted ? withAlpha(SEMANTIC.success, 0.4) : 'rgba(255,255,255,0.12)')
           .attr('stroke-width', isSourceCompleted ? 1.5 : 1.2)
           .attr('stroke-dasharray', isSourceCompleted ? 'none' : '3,3')
           .attr('marker-end', 'url(#arrow)');
@@ -284,7 +282,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         .attr('cy', CARD_HEIGHT / 2)
         .attr('r', 4.5)
         .attr('fill', d => {
-          if (d.status === 'completed') return '#00C896';
+          if (d.status === 'completed') return SEMANTIC.success;
           if (d.status === 'in_progress') return getAccentColor();
           return '#3F3F46';
         });
@@ -309,7 +307,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         .attr('y', CARD_HEIGHT / 2 + 4)
         .attr('text-anchor', 'end')
         .attr('font-size', '11px')
-        .attr('fill', '#00C896')
+        .attr('fill', SEMANTIC.success)
         .text('✓');
 
       // Auto-fit bounds calculation
@@ -465,12 +463,12 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
       nodeGroup.append('circle')
         .attr('r', d => d.radius)
         .attr('fill', d => {
-          if (d.status === 'completed') return 'rgba(0, 200, 150, 0.22)';
-          if (d.status === 'in_progress') return 'rgba(240, 165, 0, 0.22)';
+          if (d.status === 'completed') return withAlpha(SEMANTIC.success, 0.22);
+          if (d.status === 'in_progress') return withAlpha(getAccentColor(), 0.22);
           return '#151926';
         })
         .attr('stroke', d => {
-          if (d.status === 'completed') return '#00C896';
+          if (d.status === 'completed') return SEMANTIC.success;
           if (d.status === 'in_progress') return getAccentColor();
           return getPhaseColor(d.phase);
         })
@@ -484,7 +482,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         .attr('cy', d => -d.radius + 7)
         .attr('r', 3)
         .attr('fill', d => {
-          if (d.status === 'completed') return '#00C896';
+          if (d.status === 'completed') return SEMANTIC.success;
           if (d.status === 'in_progress') return getAccentColor();
           return 'rgba(255,255,255,0.2)';
         });
@@ -497,7 +495,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         .attr('font-weight', '600')
         .attr('fill', d => {
           if (d.status === 'completed') return '#E6FFFA';
-          if (d.status === 'in_progress') return '#FEF9C3';
+          if (d.status === 'in_progress') return lighten(getAccentColor(), 0.85);
           return '#F8FAFC';
         })
         .each(function(d) {
@@ -665,7 +663,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
               <span className="text-[11px] text-zinc-400">In Progress</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#00C896]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-status-completed" />
               <span className="text-[11px] text-zinc-400">Completed</span>
             </div>
           </div>
@@ -697,7 +695,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
                             : s === 'in_progress'
                               ? 'border-accent-amber text-accent-amber bg-accent-amber/10'
                               : 'border-zinc-500 text-zinc-300 bg-white/[0.06]'
-                          : 'border-white/8 text-zinc-400 hover:border-white/20 hover:text-zinc-200'
+                          : 'border-white/[0.08] text-zinc-400 hover:border-white/20 hover:text-zinc-200'
                       }`}
                     >
                       {s.replace('_', ' ')}
@@ -719,7 +717,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
             {selected.description && (
               <div>
                 <p className="text-xs text-txt-muted mb-1.5 font-medium">Concept & Overview</p>
-                <div className="p-3 bg-white/[0.03] border border-white/8 rounded-xl text-xs text-zinc-300 leading-relaxed">
+                <div className="p-3 bg-white/[0.03] border border-white/[0.08] rounded-xl text-xs text-zinc-300 leading-relaxed">
                   {selected.description}
                 </div>
               </div>
@@ -736,7 +734,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
                   {selected.subtopics.map((st, idx) => (
                     <div
                       key={idx}
-                      className="flex items-start gap-2 p-2 rounded-lg bg-white/[0.02] border border-white/6 text-xs text-zinc-300"
+                      className="flex items-start gap-2 p-2 rounded-lg bg-white/[0.02] border border-white/[0.06] text-xs text-zinc-300"
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-accent-amber mt-1.5 flex-shrink-0" />
                       <span>{st}</span>
@@ -750,7 +748,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
             {selected.resources && selected.resources.length > 0 && (
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
-                  <ExternalLink size={13} className="text-accent-sky" />
+                  <ExternalLink size={13} className="text-accent-tertiary" />
                   <p className="text-xs text-txt-muted font-medium">Curated Free Resources</p>
                 </div>
                 <div className="space-y-1.5">
@@ -760,7 +758,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
                       href={safeUrl(res.url)}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] hover:bg-white/[0.06] border border-white/6 hover:border-accent-amber/30 transition-all text-xs text-zinc-200 group"
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-accent-amber/30 transition-all text-xs text-zinc-200 group"
                     >
                       <span className="truncate pr-2 group-hover:text-accent-amber transition-colors">
                         {res.title}

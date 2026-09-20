@@ -174,12 +174,3 @@ export const dataAnalystEdges: RoadmapEdge[] = [
   { source: 'big-data',        target: 'spark' },
   { source: 'big-data',        target: 'mapreduce' },
 ];
-
-export const PHASE_COLORS: Record<string, string> = {
-  Foundation:        '#F0A500',
-  Excel:             '#4FC3F7',
-  'SQL & Programming':'#00C896',
-  'Data Handling':   '#A78BFA',
-  Analytics:         '#FB923C',
-  Advanced:          '#FF6B6B',
-};

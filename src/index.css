@@ -9,13 +9,38 @@
   --bg-base:        #0D0F14;
   --bg-surface:     #161A23;
   --bg-surface-2:   #1E2433;
-  --accent-amber:   #F0A500;
-  --accent-amber-dim: #B87A00;
-  --accent-brand:   #F0A500;
-  --accent-mint:    #00C896;
-  --accent-coral:   #FF6B6B;
-  --accent-sky:     #4FC3F7;
-  --accent-violet:  #A78BFA;
+  /* ── Theme package (Scholar Amber defaults) ────────────────────────────────
+     Overwritten at runtime by applyTheme() in src/lib/themes.ts. Roles:
+       primary → --accent-amber (legacy name) · secondary · tertiary · highlight
+     Hex vars are for plain CSS; --c-* are space-separated RGB channels so
+     Tailwind can build opacity variants (bg-accent-secondary/20). */
+  --accent-amber:            #F0A500;
+  --accent-amber-dim:        #AD7700;
+  --accent-amber-light:      #F3B938;
+  --accent-primary:          #F0A500;
+  --accent-brand:            #F0A500;
+  --accent-secondary:        #E8703A;
+  --accent-secondary-dim:    #A7512A;
+  --accent-secondary-light:  #ED8F65;
+  --accent-tertiary:         #3FB8AF;
+  --accent-tertiary-dim:     #2D847E;
+  --accent-tertiary-light:   #69C8C1;
+  --accent-highlight:        #F3E2B3;
+  --accent-highlight-dim:    #AFA381;
+  --accent-highlight-light:  #F6E8C4;
+  --c-primary:         240 165 0;
+  --c-primary-dim:     173 119 0;
+  --c-primary-light:   243 185 56;
+  --c-secondary:       232 112 58;
+  --c-secondary-dim:   167 81 42;
+  --c-secondary-light: 237 143 101;
+  --c-tertiary:        63 184 175;
+  --c-tertiary-dim:    45 132 126;
+  --c-tertiary-light:  105 200 193;
+  --c-highlight:       243 226 179;
+  --c-highlight-dim:   175 163 129;
+  --c-highlight-light: 246 232 196;
+  --accent-glow-rgb:   240,165,0;
   --txt-primary:    #E8EAF0;
   --txt-secondary:  #8A94A8;
   --txt-muted:      #4A5568;
@@ -47,6 +72,11 @@ body {
   overflow: hidden;
 }
 
+::selection {
+  background: rgb(var(--c-primary) / 0.30);
+  color: rgb(var(--c-primary-light));
+}
+
 /* ── Scrollbars ──────────────────────────────────────────────────────────── */
 * {
   scrollbar-width: thin;
@@ -72,15 +102,16 @@ body {
   box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 8px 32px rgba(0,0,0,0.4);
 }
 
-/* ── Gradient text ───────────────────────────────────────────────────────── */
-.text-gradient-amber {
-  background: linear-gradient(135deg, #F0A500 0%, #FFD36B 100%);
+/* ── Gradient text (tonal: a role → its own lighter shade) ───────────────── */
+.text-gradient-amber,
+.text-gradient-primary {
+  background: linear-gradient(135deg, rgb(var(--c-primary)) 0%, rgb(var(--c-primary-light)) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-.text-gradient-mint {
-  background: linear-gradient(135deg, #00C896 0%, #00FFBA 100%);
+.text-gradient-secondary {
+  background: linear-gradient(135deg, rgb(var(--c-secondary)) 0%, rgb(var(--c-secondary-light)) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -108,7 +139,7 @@ body {
 .tiptap-editor p  { margin: 0.4em 0; color: var(--txt-secondary); }
 .tiptap-editor code {
   background: var(--bg-surface-2);
-  color: var(--accent-sky);
+  color: rgb(var(--c-tertiary));
   padding: 0.15em 0.4em;
   border-radius: 4px;
   font-family: 'JetBrains Mono', monospace;
@@ -124,7 +155,7 @@ body {
 }
 .tiptap-editor pre code { background: none; padding: 0; }
 .tiptap-editor mark {
-  background: rgba(240,165,0,0.25);
+  background: rgb(var(--c-primary) / 0.25);
   color: var(--accent-amber);
   padding: 0 2px;
   border-radius: 2px;
@@ -140,7 +171,7 @@ body {
 }
 .tiptap-editor ul[data-type="taskList"] li input[type="checkbox"] {
   margin-top: 0.25em;
-  accent-color: var(--accent-mint);
+  accent-color: var(--accent-secondary);
   cursor: pointer;
 }
 .tiptap-editor p.is-editor-empty:first-child::before {
@@ -151,7 +182,7 @@ body {
   height: 0;
 }
 .tiptap-editor blockquote {
-  border-left: 3px solid var(--accent-amber);
+  border-left: 3px solid rgb(var(--c-secondary));
   padding-left: 1rem;
   color: var(--txt-muted);
   margin: 0.8em 0;
@@ -172,4 +203,19 @@ body {
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position:  200% 0; }
+}
+
+/* ── Theme package: brand mark glow (primary) ─────────────────────────────── */
+.brand-logo-glow {
+  border-color: rgb(var(--c-primary) / 0.8);
+  box-shadow:
+    0 0 6px rgb(var(--c-primary) / 0.7),
+    0 0 12px rgb(var(--c-primary) / 0.25);
+}
+
+/* ── Theme package: primary CTA — TONAL gradient (primary → its lighter shade).
+      Never a blend of two different hues. ──────────────────────────────────── */
+.btn-accent-gradient {
+  background-color: rgb(var(--c-primary));
+  background-image: linear-gradient(180deg, rgb(var(--c-primary-light)) 0%, rgb(var(--c-primary)) 100%);
 }

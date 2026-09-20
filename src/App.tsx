@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { AppLayout } from './components/layout/AppLayout';
@@ -45,27 +44,13 @@ const ProtectedRoutes = () => {
 
 // ── Auth routes (redirect to / if already authenticated) ──────────────────────
 const AuthRoutes = () => {
-  const { session, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   if (loading) return <LoadingScreen />;
-  if (session) return <Navigate to="/" replace />;
+  if (isAuthenticated) return <Navigate to="/" replace />;
   return <Login />;
 };
 
 export default function App() {
-  React.useEffect(() => {
-    try {
-      const saved = localStorage.getItem('theme_accent');
-      if (saved) {
-        let hex = saved;
-        if (saved.startsWith('"') && saved.endsWith('"')) {
-          hex = JSON.parse(saved);
-        }
-        document.documentElement.style.setProperty('--accent-amber', hex);
-        document.documentElement.style.setProperty('--accent-brand', hex);
-      }
-    } catch {}
-  }, []);
-
   return (
     <AuthProvider>
       <BrowserRouter>

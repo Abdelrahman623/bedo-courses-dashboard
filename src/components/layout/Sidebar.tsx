@@ -14,20 +14,34 @@ interface NavItem {
   hasDot?: boolean;
 }
 
+type Tone = 'primary' | 'secondary' | 'tertiary' | 'highlight';
+
 interface NavSection {
   title: string;
+  /** Theme role that colors this section's active item, hover icon and heading dot */
+  tone: Tone;
   items: NavItem[];
 }
+
+// Full class strings (not built dynamically) so Tailwind can see every class.
+const TONES: Record<Tone, { active: string; icon: string; hoverIcon: string; dot: string }> = {
+  primary:   { active: 'border-accent-amber/40 bg-accent-amber/10',         icon: 'text-accent-amber',     hoverIcon: 'group-hover:text-accent-amber',     dot: 'bg-accent-amber' },
+  secondary: { active: 'border-accent-secondary/40 bg-accent-secondary/10', icon: 'text-accent-secondary', hoverIcon: 'group-hover:text-accent-secondary', dot: 'bg-accent-secondary' },
+  tertiary:  { active: 'border-accent-tertiary/40 bg-accent-tertiary/10',   icon: 'text-accent-tertiary',  hoverIcon: 'group-hover:text-accent-tertiary',  dot: 'bg-accent-tertiary' },
+  highlight: { active: 'border-accent-highlight/40 bg-accent-highlight/10', icon: 'text-accent-highlight', hoverIcon: 'group-hover:text-accent-highlight', dot: 'bg-accent-highlight' },
+};
 
 const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Overview',
+    tone: 'primary',
     items: [
       { id: 'overview', to: '/', icon: LayoutGrid, label: 'Overview' },
     ],
   },
   {
     title: 'Learning',
+    tone: 'secondary',
     items: [
       { id: 'paths', to: '/courses?view=roadmap', icon: GitFork, label: 'Paths' },
       { id: 'courses', to: '/courses?view=courses', icon: BookOpen, label: 'Courses' },
@@ -36,12 +50,14 @@ const NAV_SECTIONS: NavSection[] = [
   },
   {
     title: 'Practice',
+    tone: 'tertiary',
     items: [
       { id: 'projects', to: '/projects', icon: FolderKanban, label: 'Projects' },
     ],
   },
   {
     title: 'Growth',
+    tone: 'highlight',
     items: [
       { id: 'tracker', to: '/tracker', icon: Activity, label: 'Tracker' },
       { id: 'analytics', to: '/analytics', icon: BarChart2, label: 'Analytics' },
@@ -94,7 +110,7 @@ export const Sidebar: React.FC = () => {
       <div className="flex items-center gap-3 px-4 h-[56px] flex-shrink-0">
 
         {/* Logo */}
-        <div className="relative flex items-center justify-center w-9 h-9 rounded-[10px] bg-[#081722] border border-sky-400/80 shadow-[0_0_6px_rgba(56,189,248,0.8),0_0_12px_rgba(56,189,248,0.3)] flex-shrink-0 overflow-hidden">
+        <div className="brand-logo-glow relative flex items-center justify-center w-9 h-9 rounded-[10px] bg-[#081722] border flex-shrink-0 overflow-hidden">
           <img
             src="/nl-logo.png"
             alt="Noname Learn"
@@ -108,7 +124,7 @@ export const Sidebar: React.FC = () => {
               Noname
             </span>
 
-            <span className="text-sky-400 text-[18px] leading-none font-semibold tracking-tight">
+            <span className="text-accent-secondary text-[18px] leading-none font-semibold tracking-tight">
               learn
             </span>
           </div>
@@ -117,10 +133,13 @@ export const Sidebar: React.FC = () => {
 
       {/* Grouped Navigation */}
       <nav className="flex-1 py-3 overflow-y-auto px-3 space-y-4 scrollbar-none">
-        {NAV_SECTIONS.map((section) => (
+        {NAV_SECTIONS.map((section) => {
+          const tone = TONES[section.tone];
+          return (
           <div key={section.title} className="space-y-1">
             {!collapsed && (
-              <h3 className="text-[11px] font-medium text-zinc-400/90 px-3 pt-1 pb-1">
+              <h3 className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400/90 px-3 pt-1 pb-1">
+                <span className={`w-1 h-1 rounded-full ${tone.dot}`} />
                 {section.title}
               </h3>
             )}
@@ -135,22 +154,22 @@ export const Sidebar: React.FC = () => {
                       className={[
                         'flex items-center gap-3 px-3 py-2 rounded-xl text-xs transition-all duration-150 relative group',
                         active
-                          ? 'border border-amber-400/40 bg-white/[0.06] text-white font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]'
+                          ? `border ${tone.active} text-white font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]`
                           : 'border border-transparent text-zinc-400 hover:text-white hover:bg-white/[0.04] font-medium',
                       ].join(' ')}
                     >
                       <Icon
                         size={17}
-                        className={active ? 'text-white' : 'text-zinc-400 group-hover:text-white transition-colors'}
+                        className={active ? tone.icon : `text-zinc-400 ${tone.hoverIcon} transition-colors`}
                       />
 
                       {!collapsed && (
                         <span className="truncate flex-1 tracking-normal">{item.label}</span>
                       )}
 
-                      {/* Red notification dot */}
+                      {/* Notification dot (theme highlight role) */}
                       {item.hasDot && !collapsed && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0 shadow-[0_0_6px_rgba(244,63,94,0.7)]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-accent-highlight flex-shrink-0 shadow-[0_0_6px_rgb(var(--c-highlight)/0.7)]" />
                       )}
 
                       {/* Tooltip when collapsed */}
@@ -165,7 +184,8 @@ export const Sidebar: React.FC = () => {
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
 
         {/* Divider before Settings */}
         <div className="pt-1">
@@ -175,13 +195,13 @@ export const Sidebar: React.FC = () => {
               className={[
                 'flex items-center gap-3 px-3 py-2 rounded-xl text-xs transition-all duration-150 relative group',
                 isSettingsActive
-                  ? 'border border-amber-400/40 bg-white/[0.06] text-white font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]'
+                  ? `border ${TONES.primary.active} text-white font-semibold shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]`
                   : 'border border-transparent text-zinc-400 hover:text-white hover:bg-white/[0.04] font-medium',
               ].join(' ')}
             >
               <Settings
                 size={17}
-                className={isSettingsActive ? 'text-white' : 'text-zinc-400 group-hover:text-white transition-colors'}
+                className={isSettingsActive ? TONES.primary.icon : `text-zinc-400 ${TONES.primary.hoverIcon} transition-colors`}
               />
               {!collapsed && (
                 <span className="truncate flex-1 tracking-normal">Settings</span>

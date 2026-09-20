@@ -2,7 +2,8 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Flame, Clock, Target, Plus, Zap, ArrowRight,
-  CheckCircle2, Compass, PenLine, Sparkles
+  CheckCircle2, Compass, PenLine, Sparkles,
+  GitFork, FolderKanban, BarChart2
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -65,7 +66,7 @@ export const Home: React.FC = () => {
             Start Focus Session
           </Button>
           <Button
-            variant="secondary"
+            variant="tonal"
             size="sm"
             icon={<Compass size={14} />}
             onClick={() => navigate('/courses')}
@@ -102,7 +103,7 @@ export const Home: React.FC = () => {
           <div className="p-5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs text-zinc-400 font-medium">
               <span>This Week Volume</span>
-              <span className="font-mono text-[#00C896] font-semibold">{weeklyPct}% of goal</span>
+              <span className="font-mono text-accent-secondary font-semibold">{weeklyPct}% of goal</span>
             </div>
             <div className="my-3">
               <span className="text-3xl font-bold tracking-tight text-white font-mono tabular-nums">
@@ -112,7 +113,7 @@ export const Home: React.FC = () => {
             </div>
             <div className="w-full bg-white/[0.06] h-1.5 rounded-full overflow-hidden">
               <div
-                className="h-full bg-[#00C896] rounded-full transition-all duration-500"
+                className="h-full bg-accent-secondary rounded-full transition-all duration-500"
                 style={{ width: `${weeklyPct}%` }}
               />
             </div>
@@ -122,7 +123,7 @@ export const Home: React.FC = () => {
           <div className="p-5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs text-zinc-400 font-medium">
               <span>Current Streak</span>
-              <span className="flex items-center gap-1 text-accent-amber">
+              <span className="flex items-center gap-1 text-accent-highlight">
                 <Flame size={13} /> Active
               </span>
             </div>
@@ -141,7 +142,7 @@ export const Home: React.FC = () => {
           <div className="p-5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs text-zinc-400 font-medium">
               <span>Active Curriculum</span>
-              <span className={`inline-block w-2 h-2 rounded-full ${inProgressNodes > 0 ? 'bg-[#4FC3F7] animate-pulse' : 'bg-zinc-600'}`} />
+              <span className={`inline-block w-2 h-2 rounded-full ${inProgressNodes > 0 ? 'bg-accent-tertiary animate-pulse' : 'bg-zinc-600'}`} />
             </div>
             <div className="my-3 flex items-baseline gap-2">
               <span className="text-3xl font-bold tracking-tight text-white font-mono tabular-nums">
@@ -151,7 +152,7 @@ export const Home: React.FC = () => {
             </div>
             <p className="text-[11px] text-zinc-500 truncate">
               {activeTopic ? (
-                <>Focus: <span className="text-zinc-300">{activeTopic.label}</span></>
+                <>Focus: <span className="text-accent-tertiary">{activeTopic.label}</span></>
               ) : (
                 <span className="text-zinc-500">No active path chosen</span>
               )}
@@ -171,7 +172,7 @@ export const Home: React.FC = () => {
                   <Zap size={14} className="text-accent-amber" />
                   <span>Today's Learning Focus</span>
                 </div>
-                <span className="text-xs font-mono text-zinc-500">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-accent-tertiary/10 text-accent-tertiary border border-accent-tertiary/20">
                   Phase: {activeTopic.phase || 'Core Curriculum'}
                 </span>
               </div>
@@ -203,7 +204,7 @@ export const Home: React.FC = () => {
                     Start Timer
                   </Button>
                   <Button
-                    variant="secondary"
+                    variant="tonal"
                     size="sm"
                     icon={<PenLine size={14} />}
                     onClick={() => navigate('/notes')}
@@ -238,10 +239,14 @@ export const Home: React.FC = () => {
                 {/* Quick Starter Templates */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
                   {[
-                    { id: 'full-stack', label: 'Full-Stack Web', icon: '🚀', desc: 'Frontend, Backend, APIs' },
-                    { id: 'data-analyst', label: 'Data Analyst', icon: '📊', desc: 'SQL, Python, BI' },
-                    { id: 'ai-engineer', label: 'AI Engineer', icon: '🤖', desc: 'LLMs, PyTorch, Agents' },
-                    { id: 'cyber-security', label: 'Cybersecurity', icon: '🛡️', desc: 'Networking, Defense' },
+                    { id: 'full-stack', label: 'Full-Stack Web', icon: '🚀', desc: 'Frontend, Backend, APIs',
+                      hover: 'hover:bg-accent-amber/10 hover:border-accent-amber/30', text: 'group-hover:text-accent-amber' },
+                    { id: 'data-analyst', label: 'Data Analyst', icon: '📊', desc: 'SQL, Python, BI',
+                      hover: 'hover:bg-accent-secondary/10 hover:border-accent-secondary/30', text: 'group-hover:text-accent-secondary' },
+                    { id: 'ai-engineer', label: 'AI Engineer', icon: '🤖', desc: 'LLMs, PyTorch, Agents',
+                      hover: 'hover:bg-accent-tertiary/10 hover:border-accent-tertiary/30', text: 'group-hover:text-accent-tertiary' },
+                    { id: 'cyber-security', label: 'Cybersecurity', icon: '🛡️', desc: 'Networking, Defense',
+                      hover: 'hover:bg-accent-highlight/10 hover:border-accent-highlight/30', text: 'group-hover:text-accent-highlight' },
                   ].map(tpl => (
                     <button
                       key={tpl.id}
@@ -249,10 +254,10 @@ export const Home: React.FC = () => {
                         loadTemplate(tpl.id);
                         navigate('/courses');
                       }}
-                      className="p-3 rounded-xl bg-white/[0.04] hover:bg-accent-amber/10 border border-white/8 hover:border-accent-amber/30 text-left transition-all cursor-pointer group"
+                      className={`p-3 rounded-xl bg-white/[0.04] border border-white/[0.08] ${tpl.hover} text-left transition-all cursor-pointer group`}
                     >
                       <div className="text-lg mb-1">{tpl.icon}</div>
-                      <div className="text-xs font-semibold text-white group-hover:text-accent-amber transition-colors">
+                      <div className={`text-xs font-semibold text-white ${tpl.text} transition-colors`}>
                         {tpl.label}
                       </div>
                       <div className="text-[10px] text-zinc-500 mt-0.5">{tpl.desc}</div>
@@ -282,46 +287,33 @@ export const Home: React.FC = () => {
             </Card>
           )}
 
-          {/* Quick Study Navigation */}
+          {/* Quick Study Navigation — one theme role per card */}
           <div className="grid grid-cols-3 gap-3">
-            <button
-              onClick={() => navigate('/courses')}
-              className="p-3 bg-[#131722] hover:bg-[#161B28] border border-white/[0.08] hover:border-white/[0.15] rounded-xl text-left transition-all duration-150 group cursor-pointer"
-            >
-              <span className="block text-[11px] font-medium text-zinc-400">Interactive Map</span>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-sm font-semibold text-white group-hover:text-accent-amber transition-colors">
-                  D3 Roadmap
+            {[
+              { to: '/courses',   eyebrow: 'Interactive Map', title: 'D3 Roadmap',      Icon: GitFork,
+                card: 'hover:border-accent-amber/40',     chip: 'bg-accent-amber/10 text-accent-amber',         text: 'group-hover:text-accent-amber',     arrow: 'group-hover:text-accent-amber' },
+              { to: '/projects',  eyebrow: 'Portfolio',       title: 'Projects Kanban', Icon: FolderKanban,
+                card: 'hover:border-accent-secondary/40', chip: 'bg-accent-secondary/10 text-accent-secondary', text: 'group-hover:text-accent-secondary', arrow: 'group-hover:text-accent-secondary' },
+              { to: '/analytics', eyebrow: 'Performance',     title: 'Skill Radar',     Icon: BarChart2,
+                card: 'hover:border-accent-tertiary/40',  chip: 'bg-accent-tertiary/10 text-accent-tertiary',   text: 'group-hover:text-accent-tertiary',  arrow: 'group-hover:text-accent-tertiary' },
+            ].map(({ to, eyebrow, title, Icon, card, chip, text, arrow }) => (
+              <button
+                key={to}
+                onClick={() => navigate(to)}
+                className={`p-3 bg-[#131722] hover:bg-[#161B28] border border-white/[0.08] ${card} rounded-xl text-left transition-all duration-150 group cursor-pointer flex items-center gap-3`}
+              >
+                <span className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${chip}`}>
+                  <Icon size={16} />
                 </span>
-                <ArrowRight size={14} className="text-zinc-500 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </button>
-
-            <button
-              onClick={() => navigate('/projects')}
-              className="p-3 bg-[#131722] hover:bg-[#161B28] border border-white/[0.08] hover:border-white/[0.15] rounded-xl text-left transition-all duration-150 group cursor-pointer"
-            >
-              <span className="block text-[11px] font-medium text-zinc-400">Portfolio</span>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-sm font-semibold text-white group-hover:text-accent-amber transition-colors">
-                  Projects Kanban
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-medium text-zinc-400">{eyebrow}</span>
+                  <span className="flex items-center justify-between mt-0.5">
+                    <span className={`text-sm font-semibold text-white ${text} transition-colors truncate`}>{title}</span>
+                    <ArrowRight size={14} className={`text-zinc-500 ${arrow} group-hover:translate-x-0.5 transition-all`} />
+                  </span>
                 </span>
-                <ArrowRight size={14} className="text-zinc-500 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </button>
-
-            <button
-              onClick={() => navigate('/analytics')}
-              className="p-3 bg-[#131722] hover:bg-[#161B28] border border-white/[0.08] hover:border-white/[0.15] rounded-xl text-left transition-all duration-150 group cursor-pointer"
-            >
-              <span className="block text-[11px] font-medium text-zinc-400">Performance</span>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-sm font-semibold text-white group-hover:text-accent-amber transition-colors">
-                  Skill Radar
-                </span>
-                <ArrowRight size={14} className="text-zinc-500 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </button>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -345,7 +337,7 @@ export const Home: React.FC = () => {
                 variant="secondary"
                 size="sm"
                 className="w-full justify-start text-xs font-medium text-zinc-300"
-                icon={<PenLine size={14} className="text-[#00C896]" />}
+                icon={<PenLine size={14} className="text-accent-secondary" />}
                 onClick={() => navigate('/notes')}
               >
                 Capture Quick Study Note
@@ -354,7 +346,7 @@ export const Home: React.FC = () => {
                 variant="secondary"
                 size="sm"
                 className="w-full justify-start text-xs font-medium text-zinc-300"
-                icon={<Plus size={14} className="text-[#4FC3F7]" />}
+                icon={<Plus size={14} className="text-accent-tertiary" />}
                 onClick={() => navigate('/projects')}
               >
                 Register New Project
@@ -363,7 +355,7 @@ export const Home: React.FC = () => {
           </Card>
 
           <Card padding="p-4" hover={false} className="bg-gradient-to-b from-[#131722] to-[#10131B]">
-            <div className="flex items-center gap-1.5 text-xs text-accent-amber font-medium mb-1.5">
+            <div className="flex items-center gap-1.5 text-xs text-accent-highlight font-medium mb-1.5">
               <Sparkles size={13} />
               <span>Scholar's Codex</span>
             </div>
@@ -383,7 +375,7 @@ export const Home: React.FC = () => {
             <p className="text-xs text-zinc-500 mt-0.5">Recording daily study duration across the last 26 weeks</p>
           </div>
           <div className="flex items-center gap-3 text-xs text-zinc-400">
-            <span className="font-mono text-zinc-300 font-medium">
+            <span className="font-mono text-accent-secondary font-medium">
               {minsToHHMM(weeklyMins)} logged this week
             </span>
           </div>

@@ -1,3 +1,5 @@
+import { SEMANTIC, getThemeColors } from './themes';
+
 // ── Date helpers ──────────────────────────────────────────────────────────
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -30,9 +32,10 @@ export function ringOffset(r: number, percentage: number): number {
   return circ - (percentage / 100) * circ;
 }
 
-/** Read the current theme accent color from the CSS variable at runtime.
+/** Read the current theme PRIMARY color from the CSS variable at runtime.
  *  Falls back to Scholar Amber (#F0A500) if the variable is not set.
  *  Use this anywhere a plain hex string is needed (SVG attrs, chart colors, etc.)
+ *  For the other roles (secondary / tertiary / highlight) use getThemeColors().
  */
 export function getAccentColor(): string {
   if (typeof window === 'undefined') return '#F0A500';
@@ -43,14 +46,23 @@ export function getAccentColor(): string {
 }
 
 // ── Color helpers ─────────────────────────────────────────────────────────
+// Semantic statuses (completed / paused) keep a fixed color; the "active" ones
+// (in_progress, deployed) follow the theme — see getStatusColor().
 export const STATUS_COLORS = {
   not_started: '#4A5568',
-  in_progress: '#F0A500', // overridden at call-site via getAccentColor() where needed
-  completed:   '#00C896',
-  paused:      '#FF6B6B',
-  idea:        '#8A94A8',
-  deployed:    '#4FC3F7',
+  in_progress: '#F0A500', // static fallback only — use getStatusColor() so it follows the theme
+  completed:   SEMANTIC.success,
+  paused:      SEMANTIC.danger,
+  idea:        SEMANTIC.neutral,
+  deployed:    '#4FC3F7', // static fallback only — use getStatusColor() so it follows the theme
 } as const;
+
+/** Theme-aware status color: in_progress → primary, deployed → tertiary, the rest are semantic. */
+export function getStatusColor(status: keyof typeof STATUS_COLORS): string {
+  if (status === 'in_progress') return getThemeColors().primary;
+  if (status === 'deployed') return getThemeColors().tertiary;
+  return STATUS_COLORS[status];
+}
 
 export const STATUS_LABELS = {
   not_started: 'Not Started',
