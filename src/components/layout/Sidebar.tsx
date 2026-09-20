@@ -52,10 +52,13 @@ const NAV_SECTIONS: NavSection[] = [
 /**
  * Reformed glowing NL monogram logo from Noname Learn
  */
-export const NLLogo: React.FC<{ className?: string }> = ({ className = 'w-7 h-7' }) => (
+export const NLLogo: React.FC<{ className?: string }> = ({ className = 'w-6 h-6' }) => (
   <img
     src="/nl-logo.png"
     alt="Noname Learn"
+    width={24}
+    height={24}
+    style={{ width: 24, height: 24, objectFit: 'contain' }}
     className={`object-contain select-none pointer-events-none drop-shadow-[0_0_8px_rgba(56,189,248,0.5)] ${className}`}
   />
 );
@@ -101,7 +104,7 @@ export const Sidebar: React.FC = () => {
     >
       {/* Brand Header */}
       <div className="flex items-center gap-3 px-3.5 h-[56px] border-b border-white/[0.08] flex-shrink-0">
-        <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-sky-500/[0.08] border border-sky-400/20 shadow-[0_0_14px_rgba(56,189,248,0.22)] flex-shrink-0 group">
+        <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-[#090D14] border border-sky-400/25 shadow-[0_0_14px_rgba(56,189,248,0.25)] flex-shrink-0 group">
           <NLLogo className="w-6 h-6 transition-transform duration-200 group-hover:scale-105" />
         </div>
         {!collapsed && (
