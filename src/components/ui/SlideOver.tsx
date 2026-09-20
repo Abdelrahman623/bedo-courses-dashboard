@@ -33,9 +33,9 @@ export const SlideOver: React.FC<SlideOverProps> = ({
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring' as const, stiffness: 320, damping: 32 }}
-            className={`fixed right-0 top-0 h-full z-50 ${width} bg-bg-surface border-l border-white/8 flex flex-col shadow-2xl`}
+            className={`fixed right-0 top-0 h-full z-50 ${width} bg-bg-surface border-l border-white/[0.08] flex flex-col shadow-2xl`}
           >
-            <div className="flex items-start justify-between p-5 border-b border-white/6">
+            <div className="flex items-start justify-between p-5">
               <div>
                 {title && <h3 className="font-semibold text-txt-primary">{title}</h3>}
                 {subtitle && <p className="text-xs text-txt-muted mt-0.5">{subtitle}</p>}

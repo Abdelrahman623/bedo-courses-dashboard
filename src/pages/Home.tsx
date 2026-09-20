@@ -42,7 +42,7 @@ export const Home: React.FC = () => {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* ── Header Bar ────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-white">{greeting}, {userName}</h1>
@@ -166,7 +166,7 @@ export const Home: React.FC = () => {
         <div className="lg:col-span-2 space-y-4">
           {activeTopic ? (
             <Card padding="p-6" hover={false}>
-              <div className="flex items-center justify-between pb-4 mb-4 border-b border-white/[0.06]">
+              <div className="flex items-center justify-between pb-4 mb-4">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
                   <Zap size={14} className="text-accent-amber" />
                   <span>Today's Learning Focus</span>
@@ -215,7 +215,7 @@ export const Home: React.FC = () => {
             </Card>
           ) : (
             <Card padding="p-6" hover={false} className="bg-gradient-to-br from-[#131722] to-[#161D2B] border-white/10 relative overflow-hidden">
-              <div className="flex items-center justify-between pb-4 mb-4 border-b border-white/[0.06]">
+              <div className="flex items-center justify-between pb-4 mb-4">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-accent-amber">
                   <Sparkles size={14} />
                   <span>Welcome to Bedo Courses Dashboard</span>

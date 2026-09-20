@@ -504,9 +504,9 @@ export const Courses: React.FC = () => {
   return (
     <div className="flex flex-col h-full">
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 border-b border-white/6 flex-shrink-0 bg-bg-surface/40">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 flex-shrink-0 bg-bg-surface/40">
         {/* Switch View Tabs */}
-        <div className="flex bg-[#0D1017] rounded-xl border border-white/8 p-1 gap-1">
+        <div className="flex bg-[#0D1017] rounded-xl border border-white/[0.08] p-1 gap-1">
           <button
             onClick={() => setActiveView('roadmap')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
@@ -594,7 +594,7 @@ export const Courses: React.FC = () => {
 
       {/* ── Enrollment Notification Banner ─────────────────────────────────── */}
       {enrolledNotice && (
-        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-6 py-2 flex items-center justify-between text-xs text-emerald-300 animate-fadeIn flex-shrink-0">
+        <div className="bg-emerald-500/10 px-6 py-2 flex items-center justify-between text-xs text-emerald-300 animate-fadeIn flex-shrink-0">
           <div className="flex items-center gap-2">
             <CheckCircle2 size={14} className="text-emerald-400" />
             <span className="font-medium">{enrolledNotice}</span>
@@ -611,7 +611,7 @@ export const Courses: React.FC = () => {
 
       {/* ── Add Topic Notification Banner ──────────────────────────────────── */}
       {addedTopicNotice && (
-        <div className="bg-cyan-500/10 border-b border-cyan-500/20 px-6 py-2 flex items-center justify-between text-xs text-cyan-300 animate-fadeIn flex-shrink-0">
+        <div className="bg-cyan-500/10 px-6 py-2 flex items-center justify-between text-xs text-cyan-300 animate-fadeIn flex-shrink-0">
           <div className="flex items-center gap-2">
             <CheckCircle2 size={14} className="text-cyan-400" />
             <span className="font-medium">{addedTopicNotice}</span>
@@ -632,7 +632,7 @@ export const Courses: React.FC = () => {
         <div className="flex-1 overflow-hidden flex flex-col">
           {/* Stats strip (only if nodes exist) */}
           {totalTopics > 0 && (
-            <div className="flex items-center gap-6 px-6 py-2.5 border-b border-white/4 bg-bg-surface/30 flex-shrink-0">
+            <div className="flex items-center gap-6 px-6 py-2.5 bg-bg-surface/30 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-status-completed" />
                 <span className="text-xs text-txt-muted">{completedTopics} completed</span>
@@ -862,7 +862,7 @@ export const Courses: React.FC = () => {
             {/* 2. ENROLLED COURSES CONTAINER */}
             <motion.div variants={item}>
               <div className="rounded-2xl border border-white/[0.08] bg-[#0A0D14]/60 p-6 space-y-4 shadow-lg">
-                <div className="flex items-center justify-between gap-4 flex-wrap border-b border-white/6 pb-4">
+                <div className="flex items-center justify-between gap-4 flex-wrap pb-4">
                   <div>
                     <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
                       <BookOpen size={16} className="text-accent-amber" />
@@ -1185,8 +1185,8 @@ export const Courses: React.FC = () => {
       >
         <div className="flex flex-col max-h-[78vh] -mx-6 -my-4">
           {/* Top Sub-navigation Tabs */}
-          <div className="flex items-center justify-between px-6 py-3 border-b border-white/[0.08] bg-[#121622] flex-shrink-0">
-            <div className="flex bg-[#0D1017] rounded-xl border border-white/8 p-1 gap-1">
+          <div className="flex items-center justify-between px-6 py-3 bg-[#121622] flex-shrink-0">
+            <div className="flex bg-[#0D1017] rounded-xl border border-white/[0.08] p-1 gap-1">
               <button
                 onClick={() => setTemplateTab('explore')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${

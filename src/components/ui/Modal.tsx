@@ -53,7 +53,7 @@ export const Modal: React.FC<ModalProps> = ({
             ].join(' ')}
           >
             {title && (
-              <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] flex-shrink-0 bg-[#161B28]">
+              <div className="flex items-center justify-between px-6 py-4 flex-shrink-0 bg-[#161B28]">
                 <h2 className="font-semibold text-sm text-white tracking-tight">{title}</h2>
                 <Button variant="ghost" size="sm" onClick={onClose} icon={<X size={15} />} />
               </div>

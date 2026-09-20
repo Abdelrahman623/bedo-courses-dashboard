@@ -772,7 +772,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
               </div>
             )}
 
-            <div className="pt-3 border-t border-white/6 space-y-2">
+            <div className="pt-3 space-y-2">
               <p className="text-xs text-txt-muted mb-2 font-medium">Connected Tools</p>
               <Button
                 variant="outline"
@@ -794,7 +794,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
               </Button>
             </div>
 
-            <div className="pt-4 border-t border-white/6">
+            <div className="pt-4">
               {confirmDelete ? (
                 <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl space-y-2">
                   <p className="text-xs font-semibold text-rose-300">Remove "{selected.label}"?</p>

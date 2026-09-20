@@ -106,7 +106,7 @@ export const Tracker: React.FC = () => {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* ── Page Header ────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Focus Instrument & Time Tracker</h1>
           <p className="text-xs text-zinc-400 mt-1">
@@ -250,7 +250,7 @@ export const Tracker: React.FC = () => {
             </div>
 
             {/* Subject Selector */}
-            <div className="mt-6 pt-4 border-t border-white/[0.06]">
+            <div className="mt-6 pt-4">
               <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5">
                 Current Topic / Subject
               </label>
@@ -533,7 +533,7 @@ export const Tracker: React.FC = () => {
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-white/[0.06]">
+          <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" size="sm" type="button" onClick={() => setShowManual(false)}>
               Cancel
             </Button>

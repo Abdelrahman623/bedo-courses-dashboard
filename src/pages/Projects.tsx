@@ -114,7 +114,7 @@ export const Projects: React.FC = () => {
       </div>
 
       {/* Links Footer */}
-      <div className="flex items-center gap-3 pt-2 border-t border-white/[0.06] mt-auto">
+      <div className="flex items-center gap-3 pt-2 mt-auto">
         {project.github_url && (
           <a
             href={safeUrl(project.github_url)}
@@ -147,7 +147,7 @@ export const Projects: React.FC = () => {
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Projects & Portfolio</h1>
           <p className="text-xs text-zinc-400 mt-1">
@@ -338,7 +338,7 @@ export const Projects: React.FC = () => {
               placeholder="D:\Projects\sales-funnel"
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-white/[0.06]">
+          <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" size="sm" type="button" onClick={() => setShowModal(false)}>Cancel</Button>
             <Button variant="primary" size="sm" type="submit" loading={saving}>Create Project</Button>
           </div>

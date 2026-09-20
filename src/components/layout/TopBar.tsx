@@ -201,7 +201,7 @@ export const TopBar: React.FC = () => {
   };
 
   return (
-    <header className="h-[56px] flex-shrink-0 border-b border-white/[0.08] bg-[#0A0D14]/90 backdrop-blur-md flex items-center px-6 gap-4 sticky top-0 z-20">
+    <header className="h-[56px] flex-shrink-0 bg-[#0A0D14]/90 backdrop-blur-md flex items-center px-6 gap-4 sticky top-0 z-20">
       {/* Title + Breadcrumb */}
       <div className="flex-1 flex items-center gap-2">
         <h1 className="font-semibold text-white text-sm tracking-tight">{title}</h1>

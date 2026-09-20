@@ -91,20 +91,24 @@ export const Sidebar: React.FC = () => {
       className="h-full flex-shrink-0 bg-gradient-to-b from-[#111A24] via-[#0D141C] to-[#080B10] border-r border-white/[0.08] flex flex-col overflow-hidden relative z-10 transition-all duration-200 ease-out select-none"
     >
       {/* Brand Header */}
-      <div className="flex items-center gap-3 px-3.5 h-[56px] border-b border-white/[0.08] flex-shrink-0">
-        <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-[#090D14] border border-sky-400/25 shadow-[0_0_14px_rgba(56,189,248,0.25)] flex-shrink-0 group">
+      <div className="flex items-center gap-3 px-4 h-[56px] flex-shrink-0">
+
+        {/* Logo */}
+        <div className="relative flex items-center justify-center w-9 h-9 rounded-[10px] bg-[#081722] border border-sky-400/80 shadow-[0_0_6px_rgba(56,189,248,0.8),0_0_12px_rgba(56,189,248,0.3)] flex-shrink-0 overflow-hidden">
           <img
             src="/nl-logo.png"
             alt="Noname Learn"
-            className="w-6 h-6 object-contain select-none pointer-events-none drop-shadow-[0_0_8px_rgba(56,189,248,0.5)] transition-transform duration-200 group-hover:scale-105"
+            className="w-7 h-7 object-contain"
           />
         </div>
+        {/* Brand Name */}
         {!collapsed && (
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-bold text-sm tracking-tight text-white truncate">
+          <div className="flex items-center gap-1 whitespace-nowrap min-w-0">
+            <span className="font-bold text-[18px] leading-none tracking-tight text-white">
               Noname
             </span>
-            <span className="text-sky-400 text-sm font-semibold tracking-tight">
+
+            <span className="text-sky-400 text-[18px] leading-none font-semibold tracking-tight">
               learn
             </span>
           </div>
@@ -165,7 +169,7 @@ export const Sidebar: React.FC = () => {
 
         {/* Divider before Settings */}
         <div className="pt-1">
-          <div className="border-t border-white/[0.06] my-1" />
+          <div className="my-1" />
           <NavLink to="/settings" className="outline-none block">
             <div
               className={[
@@ -193,7 +197,7 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* Footer Collapse Toggle */}
-      <div className="border-t border-white/[0.08] p-2 flex items-center justify-center">
+      <div className="p-2 flex items-center justify-center">
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="flex items-center justify-center p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] transition-colors cursor-pointer"

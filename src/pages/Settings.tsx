@@ -368,7 +368,7 @@ export const Settings: React.FC = () => {
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       {/* ── Page Header ────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">System Settings & Preferences</h1>
           <p className="text-xs text-zinc-400 mt-1">
@@ -424,7 +424,7 @@ export const Settings: React.FC = () => {
           {/* ── TAB 1: PROFILE ────────────────────────────────────────── */}
           {activeTab === 'profile' && (
             <Card hover={false} padding="p-6">
-              <div className="pb-4 mb-5 border-b border-white/[0.06]">
+              <div className="pb-4 mb-5">
                 <h2 className="text-base font-semibold tracking-tight text-white">Profile Details</h2>
                 <p className="text-xs text-zinc-400 mt-0.5">
                   Update your personal learner details and weekly mastery goals
@@ -504,7 +504,7 @@ export const Settings: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between pt-4">
                   {profileSaved ? (
                     <span className="text-xs font-medium text-emerald-400 flex items-center gap-1.5">
                       <Check size={14} /> Profile preferences saved!
@@ -522,7 +522,7 @@ export const Settings: React.FC = () => {
           {/* ── TAB 2: THEME & STYLING ────────────────────────────────── */}
           {activeTab === 'appearance' && (
             <Card hover={false} padding="p-6">
-              <div className="pb-4 mb-5 border-b border-white/[0.06]">
+              <div className="pb-4 mb-5">
                 <h2 className="text-base font-semibold tracking-tight text-white">Theme Customization</h2>
                 <p className="text-xs text-zinc-400 mt-0.5">
                   Calibrated Midnight Scholar design palette following Impeccable contrast guidelines
@@ -562,7 +562,7 @@ export const Settings: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-white/[0.06] space-y-2">
+                <div className="pt-4 space-y-2">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                     Design Tokens & Typography
                   </h3>
@@ -584,7 +584,7 @@ export const Settings: React.FC = () => {
           {/* ── TAB 3: DATABASE & CLOUD SYNC ─────────────────────────── */}
           {activeTab === 'database' && (
             <Card hover={false} padding="p-6">
-              <div className="pb-4 mb-5 border-b border-white/[0.06]">
+              <div className="pb-4 mb-5">
                 <h2 className="text-base font-semibold tracking-tight text-white">Cloud Database Synchronization</h2>
                 <p className="text-xs text-zinc-400 mt-0.5">
                   Verify real-time connectivity with Supabase PostgreSQL and Row-Level Security
@@ -657,7 +657,7 @@ export const Settings: React.FC = () => {
           {/* ── TAB 4: BACKUPS & STORAGE ─────────────────────────────── */}
           {activeTab === 'backup' && (
             <Card hover={false} padding="p-6">
-              <div className="pb-4 mb-5 border-b border-white/[0.06]">
+              <div className="pb-4 mb-5">
                 <h2 className="text-base font-semibold tracking-tight text-white">Backups & Data Freedom</h2>
                 <p className="text-xs text-zinc-400 mt-0.5">
                   Export complete data backups or reset curriculum progress
@@ -700,7 +700,7 @@ export const Settings: React.FC = () => {
                 </div>
 
                 {/* ── Import / Restore Backup ─── */}
-                <div className="pt-5 border-t border-white/[0.06]">
+                <div className="pt-5">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">
                     Import &amp; Restore Backup
                   </h3>
@@ -801,7 +801,7 @@ export const Settings: React.FC = () => {
           {/* ── TAB 5: USER MANAGEMENT ─────────────────────────────── */}
           {activeTab === 'users' && (
             <Card hover={false} padding="p-6">
-              <div className="pb-4 mb-5 border-b border-white/[0.06]">
+              <div className="pb-4 mb-5">
                 <h2 className="text-base font-semibold tracking-tight text-white flex items-center gap-2">
                   <Shield size={16} className="text-accent-amber" />
                   User Management

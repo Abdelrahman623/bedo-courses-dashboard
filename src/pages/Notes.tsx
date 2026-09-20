@@ -278,7 +278,7 @@ const Notes: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="
                 w-full pl-8 pr-3 py-1.5 text-xs
-                bg-bg-surface2 border border-white/6
+                bg-bg-surface2 border border-white/[0.06]
                 rounded-lg text-txt-primary placeholder:text-txt-muted
                 focus:outline-none focus:border-accent-amber/40
                 transition-colors
@@ -398,7 +398,7 @@ const Notes: React.FC = () => {
         </div>
 
         {/* Footer count */}
-        <div className="p-3 border-t border-white/[0.035] bg-[#0F131A]">
+        <div className="p-3 bg-[#0F131A]">
           <p className="text-[10px] text-txt-muted text-center">
             {filtered.length} {filtered.length === 1 ? 'note' : 'notes'}
           </p>
@@ -469,7 +469,7 @@ const Notes: React.FC = () => {
                       setEditLinkedId('');
                       setShowLinkModal(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/8 text-xs text-zinc-400 hover:text-accent-amber transition-all cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.08] text-xs text-zinc-400 hover:text-accent-amber transition-all cursor-pointer"
                   >
                     <Link2 size={12} className="text-accent-amber" />
                     <span>+ Link to Course, Topic, or Project</span>
@@ -721,8 +721,8 @@ const Notes: React.FC = () => {
           </div>
 
           {newNoteType === 'linked' && (
-            <div className="space-y-3 p-3 rounded-xl bg-white/[0.02] border border-white/8">
-              <div className="flex gap-1.5 bg-[#0D1017] p-1 rounded-lg border border-white/6">
+            <div className="space-y-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.08]">
+              <div className="flex gap-1.5 bg-[#0D1017] p-1 rounded-lg border border-white/[0.06]">
                 <button
                   type="button"
                   onClick={() => { setNewNoteLinkType('course'); setNewNoteLinkedId(''); }}
@@ -808,7 +808,7 @@ const Notes: React.FC = () => {
             Connect &quot;{activeNote?.title || 'this note'}&quot; to a course, roadmap milestone, or project to access it directly within that workspace.
           </p>
 
-          <div className="flex gap-1.5 bg-[#0D1017] p-1 rounded-lg border border-white/6">
+          <div className="flex gap-1.5 bg-[#0D1017] p-1 rounded-lg border border-white/[0.06]">
             <button
               type="button"
               onClick={() => { setEditLinkType('course'); setEditLinkedId(''); }}

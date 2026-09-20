@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -89,7 +89,7 @@ export const Analytics: React.FC = () => {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* ── Page Header ────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Learning Velocity & Performance Analytics</h1>
           <p className="text-xs text-zinc-400 mt-1">
