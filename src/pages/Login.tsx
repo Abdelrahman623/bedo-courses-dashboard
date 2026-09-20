@@ -366,7 +366,7 @@ export const Login: React.FC = () => {
           </div>
 
           {/* Demo Mode Button */}
-          <div className="mt-5 pt-4 border-t border-white/6">
+          <div className="mt-5 pt-4">
             <button
               type="button"
               onClick={signInDemo}
