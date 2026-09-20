@@ -72,6 +72,8 @@ const Notes: React.FC = () => {
   const [newNoteType, setNewNoteType] = useState<NoteType>('general');
   const [newNoteLinkType, setNewNoteLinkType] = useState<'course' | 'topic' | 'project'>('course');
   const [newNoteLinkedId, setNewNoteLinkedId] = useState<string>('');
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
+  const [createNoteError, setCreateNoteError] = useState<string | null>(null);
 
   // Edit / Link Active Note Modal State
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -183,12 +185,20 @@ const Notes: React.FC = () => {
     setNewNoteType('general');
     setNewNoteLinkType('course');
     setNewNoteLinkedId('');
+    setCreateNoteError(null);
     setShowNewModal(true);
   }, []);
 
   const handleCreateNote = useCallback(async () => {
+    // Guards against a fast double-click firing two inserts before the first
+    // one resolves, which used to create two identical notes.
+    if (isCreatingNote) return;
+
     const isLinked = newNoteType === 'linked' && Boolean(newNoteLinkedId);
-    await createNote({
+    setIsCreatingNote(true);
+    setCreateNoteError(null);
+
+    const created = await createNote({
       title: newNoteTitle.trim() || 'Untitled Note',
       content: '',
       tags: [],
@@ -197,6 +207,17 @@ const Notes: React.FC = () => {
       topic_id: newNoteLinkType === 'topic' && isLinked ? newNoteLinkedId : undefined,
       project_id: newNoteLinkType === 'project' && isLinked ? newNoteLinkedId : undefined,
     });
+
+    setIsCreatingNote(false);
+
+    // createNote returns null when the save to the account failed — the
+    // store already rolled its own state back, so the only thing left is to
+    // tell the person rather than silently closing as if it worked.
+    if (!created) {
+      setCreateNoteError('Could not save the note. Check your connection and try again.');
+      return;
+    }
+
     setShowNewModal(false);
     setNewNoteTitle('');
     setNewNoteLinkedId('');
@@ -205,7 +226,7 @@ const Notes: React.FC = () => {
     if (isLinked && noteTypeFilter === 'general') {
       setNoteTypeFilter('linked');
     }
-  }, [createNote, newNoteType, newNoteLinkedId, newNoteLinkType, newNoteTitle, noteTypeFilter]);
+  }, [createNote, isCreatingNote, newNoteType, newNoteLinkedId, newNoteLinkType, newNoteTitle, noteTypeFilter]);
 
   const handleApplyEditLink = (action: 'link' | 'unlink') => {
     if (!activeNote) return;
@@ -785,17 +806,23 @@ const Notes: React.FC = () => {
             </div>
           )}
 
+          {createNoteError && (
+            <p className="text-[11px] text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+              {createNoteError}
+            </p>
+          )}
+
           <div className="flex gap-2 justify-end pt-2 border-t border-white/[0.06]">
-            <Button variant="ghost" size="sm" type="button" onClick={() => setShowNewModal(false)}>Cancel</Button>
+            <Button variant="ghost" size="sm" type="button" onClick={() => setShowNewModal(false)} disabled={isCreatingNote}>Cancel</Button>
             <Button
               variant="primary"
               size="sm"
               type="button"
               icon={<Plus size={13} />}
               onClick={handleCreateNote}
-              disabled={newNoteType === 'linked' && !newNoteLinkedId}
+              disabled={isCreatingNote || (newNoteType === 'linked' && !newNoteLinkedId)}
             >
-              Create Note
+              {isCreatingNote ? 'Creating…' : 'Create Note'}
             </Button>
           </div>
         </div>
