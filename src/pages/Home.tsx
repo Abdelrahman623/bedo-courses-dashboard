@@ -288,7 +288,7 @@ export const Home: React.FC = () => {
           )}
 
           {/* Quick Study Navigation — one theme role per card */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { to: '/courses',   eyebrow: 'Interactive Map', title: 'D3 Roadmap',      Icon: GitFork,
                 card: 'hover:border-accent-amber/40',     chip: 'bg-accent-amber/10 text-accent-amber',         text: 'group-hover:text-accent-amber',     arrow: 'group-hover:text-accent-amber' },

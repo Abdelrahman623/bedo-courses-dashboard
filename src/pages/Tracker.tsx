@@ -274,7 +274,7 @@ export const Tracker: React.FC = () => {
         <div className="lg:col-span-7 space-y-4">
           {/* KPI Strip (Unified Container, No Nested Cards) */}
           <div className="bg-[#131722] border border-white/[0.08] rounded-xl overflow-hidden shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
-            <div className="grid grid-cols-3 divide-x divide-white/[0.08]">
+            <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.08]">
               {/* Metric 1 */}
               <div className="p-4">
                 <span className="text-[11px] font-medium text-zinc-400 block">Weekly Total</span>

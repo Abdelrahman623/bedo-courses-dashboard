@@ -10,7 +10,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, Tag, Trash2, FileText,
   Bold, Italic, Code, List, CheckSquare, Link2,
-  Check, X,
+  Check, X, ArrowLeft,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
@@ -323,7 +323,9 @@ const Notes: React.FC = () => {
     <div className="h-full flex overflow-hidden">
 
       {/* ── LEFT SIDEBAR ─────────────────────────────────────────────────── */}
-      <div className="w-64 flex-shrink-0 border-r border-white/[0.035] flex flex-col bg-[#11151D]">
+      <div
+        className={`${activeNote ? 'hidden lg:flex' : 'flex'} w-full lg:w-64 flex-shrink-0 border-r border-white/[0.035] flex-col bg-[#11151D]`}
+      >
 
         {/* Scoped-to-a-project banner */}
         {projectFilterId && (
@@ -489,7 +491,9 @@ const Notes: React.FC = () => {
       </div>
 
       {/* ── RIGHT PANEL ──────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div
+        className={`${!activeNote ? 'hidden lg:flex' : 'flex'} flex-1 flex-col min-w-0 overflow-hidden`}
+      >
         {!activeNote ? (
           /* Empty state */
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
@@ -516,7 +520,16 @@ const Notes: React.FC = () => {
           <div className="flex-1 flex flex-col min-h-0">
 
             {/* ── Header: Link Bar + Title + Toolbar ─────────────────────── */}
-            <div className="flex-shrink-0 px-6 pt-5 pb-3 bg-[#0D0F14] space-y-2.5">
+            <div className="flex-shrink-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 bg-[#0D0F14] space-y-2.5">
+
+              {/* Back to list (mobile only) */}
+              <button
+                onClick={() => setActiveNote(null)}
+                className="lg:hidden flex items-center gap-1.5 text-xs font-medium text-txt-muted hover:text-txt-primary transition-colors -ml-1 mb-1"
+              >
+                <ArrowLeft size={14} />
+                Back to notes
+              </button>
 
               {/* Linked entity bar */}
               <div className="flex items-center gap-2 flex-wrap">
@@ -709,7 +722,7 @@ const Notes: React.FC = () => {
             </div>
 
             {/* ── Editor body ─────────────────────────────────────────── */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4">
               <EditorContent
                 editor={editor}
                 className="tiptap-editor flex-1 overflow-y-auto min-h-[300px]"
@@ -717,7 +730,7 @@ const Notes: React.FC = () => {
             </div>
 
             {/* ── Status bar ──────────────────────────────────────────── */}
-            <div className="flex-shrink-0 flex items-center justify-between px-6 py-2 border-t border-white/[0.035] bg-[#0C0F14]">
+            <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-2 border-t border-white/[0.035] bg-[#0C0F14]">
               <span className="text-[10px] text-txt-muted">
                 Last edited {formatDate(activeNote.updated_at)}
               </span>
