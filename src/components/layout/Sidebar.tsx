@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import {
   LayoutGrid, GitFork, BookOpen, FileEdit,
-  FolderKanban, Activity, BarChart2,
-  Settings, ChevronLeft, X,
+  FolderKanban, Activity, BarChart2, CalendarDays, CalendarClock,
+  Settings, ChevronLeft, X, GraduationCap, Route,
 } from 'lucide-react';
 import { useUIStore } from '../../store/uiStore';
+import type { CourseMode } from '../../types';
 
 interface NavItem {
   id: string;
@@ -32,23 +33,34 @@ const TONES: Record<Tone, { active: string; icon: string; hoverIcon: string; dot
   highlight: { active: 'border-accent-highlight/40 bg-accent-highlight/10', icon: 'text-accent-highlight', hoverIcon: 'group-hover:text-accent-highlight', dot: 'bg-accent-highlight' },
 };
 
-const NAV_SECTIONS: NavSection[] = [
-  {
-    title: 'Overview',
-    tone: 'primary',
-    items: [
-      { id: 'overview', to: '/', icon: LayoutGrid, label: 'Overview' },
-    ],
-  },
-  {
-    title: 'Learning',
-    tone: 'secondary',
-    items: [
-      { id: 'paths', to: '/courses?view=roadmap', icon: GitFork, label: 'Paths' },
-      { id: 'courses', to: '/courses?view=courses', icon: BookOpen, label: 'Courses' },
-      { id: 'notes', to: '/notes', icon: FileEdit, label: 'Notes', hasDot: true },
-    ],
-  },
+// `buildNavSections` rather than a static array because the Learning
+// section's contents depend on the active mode: Academic mode swaps the
+// roadmap-only "Paths" link for a "Timetable" link (a sequential roadmap
+// graph doesn't mean anything for concurrent courses), everything else in
+// the sidebar stays identical between modes.
+function buildNavSections(mode: CourseMode): NavSection[] {
+  return [
+    {
+      title: 'Overview',
+      tone: 'primary',
+      items: [
+        { id: 'overview', to: '/', icon: LayoutGrid, label: 'Overview' },
+      ],
+    },
+    {
+      title: 'Learning',
+      tone: 'secondary',
+      items: [
+        mode === 'academic'
+          ? { id: 'timetable', to: '/timetable', icon: CalendarDays, label: 'Timetable' }
+          : { id: 'paths', to: '/courses?view=roadmap', icon: GitFork, label: 'Paths' },
+        { id: 'courses', to: '/courses?view=courses', icon: BookOpen, label: 'Courses' },
+        ...(mode === 'academic'
+          ? [{ id: 'deadlines', to: '/deadlines', icon: CalendarClock, label: 'Deadlines' } as NavItem]
+          : []),
+        { id: 'notes', to: '/notes', icon: FileEdit, label: 'Notes', hasDot: true },
+      ],
+    },
   {
     title: 'Practice',
     tone: 'tertiary',
@@ -64,9 +76,8 @@ const NAV_SECTIONS: NavSection[] = [
       { id: 'analytics', to: '/analytics', icon: BarChart2, label: 'Analytics' },
     ],
   },
-];
-
-
+  ];
+}
 
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -74,6 +85,8 @@ export const Sidebar: React.FC = () => {
   const [searchParams] = useSearchParams();
   const mobileOpen = useUIStore(s => s.mobileSidebarOpen);
   const closeMobile = useUIStore(s => s.closeMobileSidebar);
+  const mode = useUIStore(s => s.mode);
+  const setMode = useUIStore(s => s.setMode);
 
   // Below `lg`, the sidebar is an off-canvas drawer, so any navigation
   // (a nav item, or Settings) should close it behind you.
@@ -94,6 +107,12 @@ export const Sidebar: React.FC = () => {
     if (item.id === 'notes') {
       return location.pathname.startsWith('/notes');
     }
+    if (item.id === 'timetable') {
+      return location.pathname.startsWith('/timetable');
+    }
+    if (item.id === 'deadlines') {
+      return location.pathname.startsWith('/deadlines');
+    }
     if (item.id === 'projects') {
       return location.pathname.startsWith('/projects');
     }
@@ -107,6 +126,7 @@ export const Sidebar: React.FC = () => {
   };
 
   const isSettingsActive = location.pathname.startsWith('/settings');
+  const navSections = buildNavSections(mode);
 
   return (
     <>
@@ -165,9 +185,50 @@ export const Sidebar: React.FC = () => {
           </button>
         </div>
 
+        {/* Mode switcher — global, persists independently per mode. Switching
+            only changes what's displayed below and on Home; it never
+            deletes or hides either mode's courses. */}
+        <div className="px-3 pb-3 flex-shrink-0">
+          <div
+            role="tablist"
+            aria-label="Learning mode"
+            className={[
+              'flex bg-white/[0.04] border border-white/[0.08] rounded-xl p-1',
+              collapsed ? 'flex-col gap-1' : 'gap-1',
+            ].join(' ')}
+          >
+            {(
+              [
+                { id: 'courses' as CourseMode, label: 'Courses', icon: Route },
+                { id: 'academic' as CourseMode, label: 'Academic', icon: GraduationCap },
+              ]
+            ).map(({ id, label, icon: Icon }) => {
+              const active = mode === id;
+              return (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setMode(id)}
+                  title={collapsed ? label : undefined}
+                  className={[
+                    'flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 cursor-pointer',
+                    active
+                      ? 'bg-accent-amber/15 text-accent-amber border border-accent-amber/30'
+                      : 'text-zinc-500 hover:text-zinc-300 border border-transparent',
+                  ].join(' ')}
+                >
+                  <Icon size={14} />
+                  {!collapsed && <span>{label}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
       {/* Grouped Navigation */}
       <nav className="flex-1 py-3 overflow-y-auto px-3 space-y-4 scrollbar-none">
-        {NAV_SECTIONS.map((section) => {
+        {navSections.map((section) => {
           const tone = TONES[section.tone];
           return (
           <div key={section.title} className="space-y-1">
