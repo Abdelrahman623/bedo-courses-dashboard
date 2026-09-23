@@ -99,6 +99,7 @@ conditional. `AcademicHome`'s "Today's Classes" card header now links to
 Not done here (later Tier 4 items): the exam/assignment tracker, the
 grade/GPA page, and the Courses-mode multi-roadmap switcher.
 
+<<<<<<< HEAD
 ## Tier 4 — Deadlines (feature 2 of 4)
 
 `src/pages/Deadlines.tsx` (new): a due-date list of `assessments` for active
@@ -126,6 +127,8 @@ pattern as the Timetable link added on "Today's Classes".
 Not done here (remaining Tier 4 items): the grade/GPA page, and the
 Courses-mode multi-roadmap switcher.
 
+=======
+>>>>>>> b919742fb5510b3d68fec9b8f102262afd78998d
 ## Tier 2 — store boundaries
 
 **Question**: does the roadmap/course store hold courses from both modes

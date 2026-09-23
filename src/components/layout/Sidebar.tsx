@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
 import {
   LayoutGrid, GitFork, BookOpen, FileEdit,
+<<<<<<< HEAD
   FolderKanban, Activity, BarChart2, CalendarDays, CalendarClock,
+=======
+  FolderKanban, Activity, BarChart2, CalendarDays,
+>>>>>>> b919742fb5510b3d68fec9b8f102262afd78998d
   Settings, ChevronLeft, X, GraduationCap, Route,
 } from 'lucide-react';
 import { useUIStore } from '../../store/uiStore';
@@ -55,9 +59,12 @@ function buildNavSections(mode: CourseMode): NavSection[] {
           ? { id: 'timetable', to: '/timetable', icon: CalendarDays, label: 'Timetable' }
           : { id: 'paths', to: '/courses?view=roadmap', icon: GitFork, label: 'Paths' },
         { id: 'courses', to: '/courses?view=courses', icon: BookOpen, label: 'Courses' },
+<<<<<<< HEAD
         ...(mode === 'academic'
           ? [{ id: 'deadlines', to: '/deadlines', icon: CalendarClock, label: 'Deadlines' } as NavItem]
           : []),
+=======
+>>>>>>> b919742fb5510b3d68fec9b8f102262afd78998d
         { id: 'notes', to: '/notes', icon: FileEdit, label: 'Notes', hasDot: true },
       ],
     },
@@ -110,9 +117,12 @@ export const Sidebar: React.FC = () => {
     if (item.id === 'timetable') {
       return location.pathname.startsWith('/timetable');
     }
+<<<<<<< HEAD
     if (item.id === 'deadlines') {
       return location.pathname.startsWith('/deadlines');
     }
+=======
+>>>>>>> b919742fb5510b3d68fec9b8f102262afd78998d
     if (item.id === 'projects') {
       return location.pathname.startsWith('/projects');
     }
