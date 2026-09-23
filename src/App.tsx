@@ -4,10 +4,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { Timetable } from './pages/Timetable';
-<<<<<<< HEAD
 import { Deadlines } from './pages/Deadlines';
-=======
->>>>>>> b919742fb5510b3d68fec9b8f102262afd78998d
 import { Courses } from './pages/Courses';
 import { Notes } from './pages/Notes';
 import { Projects } from './pages/Projects';
@@ -37,10 +34,7 @@ const ProtectedRoutes = () => {
       <Route element={<AppLayout />}>
         <Route path="/"          element={<Home />} />
         <Route path="/timetable" element={<Timetable />} />
-<<<<<<< HEAD
         <Route path="/deadlines" element={<Deadlines />} />
-=======
->>>>>>> b919742fb5510b3d68fec9b8f102262afd78998d
         <Route path="/courses"   element={<Courses />} />
         <Route path="/notes"     element={<Notes />} />
         <Route path="/projects"  element={<Projects />} />

@@ -204,7 +204,6 @@ export const AcademicHome: React.FC = () => {
 
         {/* ── Upcoming deadlines ──────────────────────────────────── */}
         <Card padding="p-5" hover={false}>
-<<<<<<< HEAD
           <div className="flex items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2">
               <CalendarClock size={15} className="text-accent-highlight" />
@@ -216,11 +215,6 @@ export const AcademicHome: React.FC = () => {
             >
               View All
             </button>
-=======
-          <div className="flex items-center gap-2 mb-4">
-            <CalendarClock size={15} className="text-accent-highlight" />
-            <h2 className="text-sm font-semibold tracking-tight text-white">Upcoming Deadlines</h2>
->>>>>>> b919742fb5510b3d68fec9b8f102262afd78998d
           </div>
           {upcomingDeadlines.length === 0 ? (
             <p className="text-xs text-zinc-500">Nothing due — you're clear.</p>
