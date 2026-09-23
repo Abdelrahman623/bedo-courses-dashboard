@@ -710,18 +710,18 @@ export const Settings: React.FC = () => {
 
               <div className="space-y-4">
                 {/* Connection Status Pill */}
-                <div className="flex items-center justify-between p-3.5 bg-[#0D1017] border border-white/[0.08] rounded-xl">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[#0D1017] border border-white/[0.08] rounded-xl">
+                  <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className={`w-3 h-3 rounded-full ${
+                      className={`w-3 h-3 rounded-full flex-shrink-0 ${
                         isSupabaseConfigured ? 'bg-status-completed animate-pulse' : 'bg-amber-400'
                       }`}
                     />
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs font-semibold text-white">
                         {isSupabaseConfigured ? 'Supabase Connected' : 'Local Offline Mode'}
                       </p>
-                      <p className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                      <p className="text-[11px] font-mono text-zinc-400 mt-0.5 truncate">
                         {supabaseUrl || 'https://placeholder.supabase.co'}
                       </p>
                     </div>
@@ -733,6 +733,7 @@ export const Settings: React.FC = () => {
                     loading={testingPing}
                     icon={<RefreshCw size={13} />}
                     onClick={handleTestConnection}
+                    className="flex-shrink-0 self-start sm:self-auto"
                   >
                     Test Latency
                   </Button>
@@ -982,7 +983,7 @@ export const Settings: React.FC = () => {
                       {allUsers.map(u => (
                         <div
                           key={u.user_id}
-                          className={`flex items-center justify-between px-4 py-3 transition-colors ${
+                          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 transition-colors ${
                             !u.is_confirmed
                               ? 'bg-amber-500/5 hover:bg-amber-500/[0.08]'
                               : 'bg-bg-surface/30 hover:bg-white/[0.03]'
@@ -1023,7 +1024,7 @@ export const Settings: React.FC = () => {
                                 <p className="text-[11px] text-zinc-500 font-mono truncate">{u.email}</p>
                                 {u.username && <span className="text-[10px] text-zinc-600">· @{u.username}</span>}
                               </div>
-                              <div className="flex items-center gap-3 mt-1 text-[10px] text-zinc-600 font-mono">
+                              <div className="flex items-center gap-3 mt-1 text-[10px] text-zinc-600 font-mono flex-wrap">
                                 <span>{u.notes_count} notes</span>
                                 <span>{u.sessions_count} sessions</span>
                                 <span>{u.projects_count} projects</span>
@@ -1031,7 +1032,7 @@ export const Settings: React.FC = () => {
                               </div>
                             </div>
                           </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               {!u.is_confirmed && (
                                 <Button
                                   variant="mint"

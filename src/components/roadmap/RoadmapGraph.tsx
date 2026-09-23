@@ -325,7 +325,12 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
       const midY = (minY + maxY) / 2;
 
       const scale = Math.min(Math.min((width - 60) / totalW, (height - 60) / totalH), 1.0);
-      const clampedScale = Math.max(scale, 0.35);
+      // Floor matches the zoom behavior's own scaleExtent (0.15) rather than
+      // an arbitrary 0.35 — that fixed floor was overriding the real fit
+      // scale on narrow phone screens with many phase columns, forcing the
+      // view to stay zoomed in past what the screen could show and pushing
+      // the outer columns off both edges instead of actually fitting.
+      const clampedScale = Math.max(scale, 0.15);
 
       boundsRef.current = { midX, midY, scale: clampedScale };
 
@@ -410,7 +415,10 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
       const midY = (minY + maxY) / 2;
 
       const autoScale = Math.min(Math.min(width / graphWidth, height / graphHeight), 1.05);
-      const clampedScale = Math.max(autoScale, 0.28);
+      // Same fix as the pipeline layout above: floor at the zoom's real
+      // scaleExtent (0.15), not an arbitrary value that can exceed the
+      // scale actually needed to fit a wide graph on a narrow screen.
+      const clampedScale = Math.max(autoScale, 0.15);
       boundsRef.current = { midX, midY, scale: clampedScale };
 
       const translateX = width / 2 - clampedScale * midX;
