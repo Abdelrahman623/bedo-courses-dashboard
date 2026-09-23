@@ -57,6 +57,13 @@
 
 html, body, #root {
   height: 100%;
+  /* 100vh on mobile Chrome/Safari is measured with the browser's address
+     bar collapsed, so while it's visible the real viewport is shorter than
+     100vh — with body's overflow hidden below, that gap at the bottom
+     (e.g. the Save Changes button, the last bit of a chart) becomes
+     permanently unreachable, not just off-screen. dvh tracks the actual
+     visible area instead, with vh kept as a fallback for older browsers. */
+  height: 100dvh;
   margin: 0;
   padding: 0;
 }

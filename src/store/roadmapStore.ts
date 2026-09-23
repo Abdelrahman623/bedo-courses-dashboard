@@ -7,11 +7,20 @@ import { ROADMAP_TEMPLATES, type RoadmapTemplate } from '../data/roadmapTemplate
 import { slugify, safeUrl } from '../lib/utils';
 
 /** Shape of the `roadmap_canvas` row in public.user_state. */
+/** A path's own saved progress — nodes carry their status/completedAt. */
+interface PathProgress {
+  nodes: RoadmapNode[];
+  edges: RoadmapEdge[];
+}
+
 interface RoadmapCanvas {
   nodes: RoadmapNode[];
   edges: RoadmapEdge[];
   activeTemplateId: string | null;
   customTemplates: Record<string, RoadmapTemplate>;
+  /** Snapshot of each path's progress, keyed by template id, so switching
+   *  the active path doesn't discard progress on the one left behind. */
+  progressByTemplate: Record<string, PathProgress>;
 }
 
 const EMPTY_CANVAS: RoadmapCanvas = {
@@ -19,6 +28,7 @@ const EMPTY_CANVAS: RoadmapCanvas = {
   edges: [],
   activeTemplateId: null,
   customTemplates: {},
+  progressByTemplate: {},
 };
 
 interface RoadmapState {
@@ -30,6 +40,7 @@ interface RoadmapState {
   localEdges: RoadmapEdge[];
   activeTemplateId: string | null;
   customTemplates: Record<string, RoadmapTemplate>;
+  progressByTemplate: Record<string, PathProgress>;
 
   fetchAll: () => Promise<void>;
   persistCanvas: () => void;
@@ -79,15 +90,29 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   localEdges: [],
   activeTemplateId: null,
   customTemplates: {},
+  progressByTemplate: {},
 
   /** Debounced save of the whole canvas to the account. */
   persistCanvas: () => {
-    const { localNodes, localEdges, activeTemplateId, customTemplates } = get();
+    const { localNodes, localEdges, activeTemplateId, customTemplates, progressByTemplate } = get();
+
+    // Keep the currently active path's snapshot in progressByTemplate up to
+    // date on every save. This is the only place that writes to it, so
+    // whatever's on the canvas when a path is left is exactly what comes
+    // back when that path is reselected later.
+    const updatedProgress = activeTemplateId
+      ? { ...progressByTemplate, [activeTemplateId]: { nodes: localNodes, edges: localEdges } }
+      : progressByTemplate;
+    if (updatedProgress !== progressByTemplate) {
+      set({ progressByTemplate: updatedProgress });
+    }
+
     queueUserState<RoadmapCanvas>('roadmap_canvas', {
       nodes: localNodes,
       edges: localEdges,
       activeTemplateId,
       customTemplates,
+      progressByTemplate: updatedProgress,
     });
   },
 
@@ -109,6 +134,15 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
         loadUserState<RoadmapCanvas>('roadmap_canvas', EMPTY_CANVAS),
       ]);
 
+      // Back-fill accounts saved before per-path progress existed: without
+      // this, the very first template switch after this fix ships would
+      // still look like it wiped the path someone was already mid-way
+      // through, since there'd be no snapshot yet to resume from.
+      const migratedProgress = { ...(canvas.progressByTemplate ?? {}) };
+      if (canvas.activeTemplateId && !migratedProgress[canvas.activeTemplateId] && canvas.nodes?.length) {
+        migratedProgress[canvas.activeTemplateId] = { nodes: canvas.nodes, edges: canvas.edges };
+      }
+
       set({
         roadmaps: (roadmaps as Roadmap[]) ?? [],
         courses: (courses as Course[]) ?? [],
@@ -117,6 +151,7 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
         localEdges: canvas.edges ?? [],
         activeTemplateId: canvas.activeTemplateId ?? null,
         customTemplates: canvas.customTemplates ?? {},
+        progressByTemplate: migratedProgress,
       });
 
       // Repair accounts where a template was loaded as the Primary Path
@@ -278,9 +313,15 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
     const tpl = get().customTemplates[templateKey] || ROADMAP_TEMPLATES[templateKey];
     if (!tpl) return;
 
+    // Resume this path exactly where it was left (persistCanvas keeps
+    // progressByTemplate current for whatever path is active, including the
+    // one we're switching away from right now) rather than reloading the
+    // template's pristine, all-not-started defaults every time.
+    const saved = get().progressByTemplate[templateKey];
+
     set({
-      localNodes: tpl.nodes.map(n => ({ ...n })),
-      localEdges: tpl.edges.map(e => ({ ...e })),
+      localNodes: saved ? saved.nodes.map(n => ({ ...n })) : tpl.nodes.map(n => ({ ...n })),
+      localEdges: saved ? saved.edges.map(e => ({ ...e })) : tpl.edges.map(e => ({ ...e })),
       activeTemplateId: templateKey,
     });
     get().persistCanvas();
@@ -296,14 +337,19 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   },
 
   clearRoadmap: () => {
-    set({ localNodes: [], localEdges: [], activeTemplateId: null });
+    const { activeTemplateId, progressByTemplate } = get();
+    const updatedProgress = { ...progressByTemplate };
+    if (activeTemplateId) delete updatedProgress[activeTemplateId];
+    set({ localNodes: [], localEdges: [], activeTemplateId: null, progressByTemplate: updatedProgress });
     get().persistCanvas();
   },
 
   deleteCustomTemplate: (templateId) => {
     const updated = { ...get().customTemplates };
     delete updated[templateId];
-    set({ customTemplates: updated });
+    const updatedProgress = { ...get().progressByTemplate };
+    delete updatedProgress[templateId];
+    set({ customTemplates: updated, progressByTemplate: updatedProgress });
     if (get().activeTemplateId === templateId) set({ activeTemplateId: null });
     get().persistCanvas();
   },

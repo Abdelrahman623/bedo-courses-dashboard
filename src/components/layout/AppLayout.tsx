@@ -43,11 +43,14 @@ export const AppLayout: React.FC = () => {
   }, [user?.id, fetchAll, fetchNotes, fetchProjects, fetchSessions]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg-base">
+    <div className="flex h-dvh overflow-hidden bg-bg-base">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar />
-        <main className="flex-1 overflow-y-auto">
+        <main
+          className="flex-1 overflow-y-auto"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
