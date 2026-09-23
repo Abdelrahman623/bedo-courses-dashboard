@@ -126,6 +126,30 @@ pattern as the Timetable link added on "Today's Classes".
 Not done here (remaining Tier 4 items): the grade/GPA page, and the
 Courses-mode multi-roadmap switcher.
 
+## Tier 4 — Grades (feature 3 of 4)
+
+`src/pages/Grades.tsx` (new): the store already had everything computed
+(`getCourseGrade`, `getGPA`, `setGrade`/`deleteGrade` were all delivered with
+the Tier 0 store work) — this was purely the missing UI to read and write
+that state. A GPA strip up top (same KPI-card shape as `AcademicHome`'s),
+then one card per active academic course showing its weighted percentage +
+letter + grade point and a list of that course's assessments; clicking an
+assessment opens a score/out-of modal wired straight to `setGrade` (and
+`deleteGrade` when clearing a recorded score). Deliberately does not let you
+create or edit assessments here — that stays on Deadlines, so an
+assessment's identity has exactly one owner and Grades only ever scores what
+already exists; an empty-course state points there via a "Manage
+Assessments" button.
+
+Wiring: new `/grades` route; Sidebar gets a "Grades" item in the Learning
+section (Academic mode only, right after Deadlines). `AcademicHome`'s
+"Course Grades" card — previously inert, read-only — now links through to it
+both via a header button and by making each course row clickable, same
+pattern as the other two Academic Home cards.
+
+Not done here (remaining Tier 4 item): the Courses-mode multi-roadmap
+switcher.
+
 ## Tier 2 — store boundaries
 
 **Question**: does the roadmap/course store hold courses from both modes

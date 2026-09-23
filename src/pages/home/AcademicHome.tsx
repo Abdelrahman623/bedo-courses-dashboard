@@ -243,12 +243,24 @@ export const AcademicHome: React.FC = () => {
 
       {/* ── Per-course grade snapshot ───────────────────────────────── */}
       <Card padding="p-5" hover={false}>
-        <h2 className="text-sm font-semibold tracking-tight text-white mb-4">Course Grades</h2>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h2 className="text-sm font-semibold tracking-tight text-white">Course Grades</h2>
+          <button
+            onClick={() => navigate('/grades')}
+            className="text-[11px] font-medium text-accent-amber hover:text-accent-amber/80 transition-colors cursor-pointer"
+          >
+            Score Assessments
+          </button>
+        </div>
         <div className="space-y-2">
           {activeCourses.map(c => {
             const grade = getCourseGrade(c.id);
             return (
-              <div key={c.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+              <div
+                key={c.id}
+                onClick={() => navigate('/grades')}
+                className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:border-white/20 transition-colors cursor-pointer"
+              >
                 <span className="text-sm font-medium text-white truncate">{c.title}</span>
                 <span className="font-mono text-xs text-accent-amber whitespace-nowrap">
                   {grade.percentage === null ? 'Not graded yet' : `${grade.percentage.toFixed(1)}% · ${grade.gradePoint?.toFixed(1)}`}

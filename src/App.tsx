@@ -5,6 +5,7 @@ import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { Timetable } from './pages/Timetable';
 import { Deadlines } from './pages/Deadlines';
+import { Grades } from './pages/Grades';
 import { Courses } from './pages/Courses';
 import { Notes } from './pages/Notes';
 import { Projects } from './pages/Projects';
@@ -35,6 +36,7 @@ const ProtectedRoutes = () => {
         <Route path="/"          element={<Home />} />
         <Route path="/timetable" element={<Timetable />} />
         <Route path="/deadlines" element={<Deadlines />} />
+        <Route path="/grades"    element={<Grades />} />
         <Route path="/courses"   element={<Courses />} />
         <Route path="/notes"     element={<Notes />} />
         <Route path="/projects"  element={<Projects />} />

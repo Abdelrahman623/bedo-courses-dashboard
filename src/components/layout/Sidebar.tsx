@@ -56,7 +56,10 @@ function buildNavSections(mode: CourseMode): NavSection[] {
           : { id: 'paths', to: '/courses?view=roadmap', icon: GitFork, label: 'Paths' },
         { id: 'courses', to: '/courses?view=courses', icon: BookOpen, label: 'Courses' },
         ...(mode === 'academic'
-          ? [{ id: 'deadlines', to: '/deadlines', icon: CalendarClock, label: 'Deadlines' } as NavItem]
+          ? [
+              { id: 'deadlines', to: '/deadlines', icon: CalendarClock, label: 'Deadlines' } as NavItem,
+              { id: 'grades', to: '/grades', icon: GraduationCap, label: 'Grades' } as NavItem,
+            ]
           : []),
         { id: 'notes', to: '/notes', icon: FileEdit, label: 'Notes', hasDot: true },
       ],
