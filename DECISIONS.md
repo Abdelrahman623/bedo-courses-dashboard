@@ -1,0 +1,114 @@
+# Decisions log
+
+Short-lived record of calls made during the Academic/Courses mode rework that
+aren't obvious from the code or the master plan. Append, don't rewrite.
+
+---
+
+## Tier 2 — guest-mode → cloud sync story for schedule/assessments/grades
+
+**Question**: now that there's more per-course state (schedule, assessments,
+grades), what happens to it for a signed-out / unconfigured-Supabase user,
+and does anything need to migrate when they sign in?
+
+**Finding**: the app has no guest-to-account migration path today, for
+anything. `getActiveUserId()` returns `null` whenever Supabase isn't
+configured or nobody's signed in, and `addCourse` / `addTemplateAsCourse`
+both no-op (or throw, caught silently) without a user id — a signed-out
+visitor cannot create a `courses` row at all in the current build. The one
+thing that *does* work while signed out is the roadmap canvas
+(`localNodes`/`localEdges` in `roadmapStore`), which lives purely in memory
+and is discarded on refresh; `queueUserState`/`saveUserState` are no-ops
+without a session, by design (see `userState.ts`'s comments).
+
+**Decision**: schedule/assessments/grades follow the *canvas* pattern, not
+the *course* pattern — they always update local Zustand state immediately
+(so the UI works fully offline, per the constraint in the master plan), and
+only sync to Supabase when `isSupabaseConfigured` is true. They do **not**
+gate on `getActiveUserId()` the way `addCourse` does, because they're keyed
+to a `course_id`, not a `user_id` — if the course they belong to couldn't be
+created without a session, gating them the same way would be redundant, not
+protective.
+
+**What this means in practice**: in a genuinely guest/unconfigured session,
+schedule/assessment/grade edits behave exactly like unsaved canvas edits —
+they're visible and interactive for the session, then gone on refresh. No
+new migration logic was added, because there's no existing "local → cloud"
+migration for courses to extend in the first place. If a real
+guest-mode-with-persistence story is wanted later (e.g. localStorage staging
+that gets pushed to Supabase on first sign-in), that's new scope beyond this
+rework and should be its own tiered task — it would need to cover `courses`
+and the canvas too, not just the three new Academic tables.
+
+**Supabase schema**: delivered as `supabase_migration_academic_mode.sql`
+(Tier 0) — `courses.mode`/`courses.source` columns plus the `schedule`,
+`assessments`, `grades` tables, RLS scoped through `courses` the same way
+`topics` already is.
+
+## Tier 1 — patch-file cleanup
+
+**Task**: reconcile `changes.patch`, `courses_fix.patch`, `fix_changes.patch`,
+`mobile_ui_fix2.patch` so repo state is unambiguous.
+
+**Finding**: none of the four applied cleanly against the current tree
+(`git apply --check` failed on all four — line numbers and surrounding
+context had moved). Rather than force-apply and risk duplicating or
+reverting work, each patch's actual content was checked against the current
+files by hand:
+
+| Patch | Target(s) | Status |
+|---|---|---|
+| `changes.patch` | `index.css`, `Analytics.tsx`, `Home.tsx`, `Notes.tsx`, `Projects.tsx` | Every hunk already present — the project-range slider CSS, the Analytics portfolio-progress bar, the Notes `?project=`/`?new=1` deep-linking, and the Projects rewrite (status↔completion reconciliation, course linking, `SlideOver` detail view) are all in the current files, some of them now living in `src/pages/home/CoursesHome.tsx` after the Tier 3 `Home.tsx` split rather than in `Home.tsx` itself. |
+| `courses_fix.patch` | `Courses.tsx` | Already present — the `flex-col sm:flex-row` responsive fix is in the file as written. |
+| `fix_changes.patch` | `index.html`, `AppLayout.tsx`, `index.css`, `roadmapStore.ts` | Already present — `viewport-fit=cover`, `100dvh`, the safe-area bottom padding, and the full `progressByTemplate` per-path-progress feature (including the migration backfill) are all in place. |
+| `mobile_ui_fix2.patch` | `RoadmapGraph.tsx`, `Settings.tsx` | Already present — both zoom-floor fixes read `0.15`, and the Settings connection pill / user rows already wrap responsively. |
+
+**Decision**: deleted all four (`git rm`). They were stale artifacts of an
+earlier, less disciplined workflow (generating a patch instead of committing
+directly) — every change they describe was independently reapplied straight
+to source at some point since, so keeping them around as uncommitted
+"pending" files was actively misleading about repo state. Nothing was
+reverted or reapplied; this was a no-op on the actual code, confirmed via
+`tsc -b --noEmit` passing clean before and after.
+
+## Tier 4 — Timetable (feature 1 of 4)
+
+`src/pages/Timetable.tsx` (new): weekly Mon–Sun grid of an academic-mode
+course's `schedule` rows, hour gridlines sized to whatever range the actual
+classes span (default 8:00–18:00 floor when there are none yet), each course
+colored by cycling the four existing accent tones so it matches the palette
+used everywhere else rather than inventing a new one. Overlapping classes on
+the same day are clustered and laned (interval-overlap grouping, not a flat
+"most lanes that ever occur that day" split) so two classes that don't
+actually conflict each keep full width.
+
+This is also the first UI that can *create* schedule rows — until now
+`AcademicHome` could only read `schedule`/`assessments` data that had no way
+to exist. Clicking a day column or an existing block opens a modal
+(course/day/start/end/location) wired to the store's existing
+`addSchedule`/`updateSchedule`/`deleteSchedule`.
+
+Wiring: new `/timetable` route; Sidebar's Learning section swaps its
+Courses-mode "Paths" link for "Timetable" when in Academic mode (a
+sequential roadmap graph has no meaning for concurrent courses) via
+`buildNavSections(mode)` replacing the old static `NAV_SECTIONS` array — the
+other three sections are identical between modes, so only that one item is
+conditional. `AcademicHome`'s "Today's Classes" card header now links to
+`/timetable`.
+
+Not done here (later Tier 4 items): the exam/assignment tracker, the
+grade/GPA page, and the Courses-mode multi-roadmap switcher.
+
+## Tier 2 — store boundaries
+
+**Question**: does the roadmap/course store hold courses from both modes
+and let callers filter/query by mode without duplicating logic?
+
+**Answer**: yes, as of the Tier 0 store changes — `courses` is one flat
+array carrying `mode` on each row; `getCoursesByMode(mode)` and
+`getActiveCourses(mode?)` are the two query points every mode-aware screen
+should call rather than filtering `courses` inline themselves. No separate
+store, slice, or duplicated CRUD path was introduced for Academic mode —
+`addCourse`, `deleteCourse`, `updateTopicStatus` etc. are unchanged and used
+by both modes. No further store-boundary work identified for Tier 2 beyond
+what Tier 0 already did.

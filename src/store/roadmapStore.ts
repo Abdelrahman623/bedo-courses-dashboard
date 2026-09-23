@@ -2,7 +2,10 @@ import { create } from 'zustand';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { getActiveUserId } from '../lib/storage';
 import { loadUserState, queueUserState } from '../lib/userState';
-import type { Course, Topic, Roadmap, TopicStatus, RoadmapNode, RoadmapEdge } from '../types';
+import type {
+  Course, Topic, Roadmap, TopicStatus, RoadmapNode, RoadmapEdge,
+  CourseMode, Schedule, Assessment, Grade, CourseGrade,
+} from '../types';
 import { ROADMAP_TEMPLATES, type RoadmapTemplate } from '../data/roadmapTemplates';
 import { slugify, safeUrl } from '../lib/utils';
 
@@ -35,6 +38,10 @@ interface RoadmapState {
   roadmaps: Roadmap[];
   courses: Course[];
   topics: Topic[];
+  // ── Academic mode ──────────────────────────────────────────────────────
+  schedules: Schedule[];
+  assessments: Assessment[];
+  grades: Grade[];
   loading: boolean;
   localNodes: RoadmapNode[];
   localEdges: RoadmapEdge[];
@@ -70,9 +77,49 @@ interface RoadmapState {
   setLocalTopicStatus: (id: string, status: TopicStatus) => void;
   getActiveCourseId: () => string | null;
 
-  addCourse: (course: Omit<Course, 'id' | 'created_at' | 'user_id'>) => Promise<void>;
+  addCourse: (
+    course: Omit<Course, 'id' | 'created_at' | 'user_id' | 'mode' | 'source'> &
+      Partial<Pick<Course, 'mode' | 'source'>>
+  ) => Promise<void>;
   deleteCourse: (id: string) => Promise<void>;
   addTemplateAsCourse: (templateKey: string) => Promise<Course>;
+
+  // ── Mode-aware course queries ────────────────────────────────────────────
+  /** All courses tagged with this mode, both seeded and user-entered. */
+  getCoursesByMode: (mode: CourseMode) => Course[];
+  /** Every course that's currently "in play" — not_started or in_progress —
+   *  across BOTH modes at once, or filtered to one mode. There is no single
+   *  "active roadmap" any more: any number of courses can be active
+   *  concurrently (this is mandatory for Academic mode, and also true for
+   *  Courses mode once someone is working through more than one path). */
+  getActiveCourses: (mode?: CourseMode) => Course[];
+
+  // ── Academic mode: schedule CRUD ─────────────────────────────────────────
+  addSchedule: (schedule: Omit<Schedule, 'id' | 'created_at'>) => Promise<void>;
+  updateSchedule: (id: string, changes: Partial<Omit<Schedule, 'id' | 'course_id' | 'created_at'>>) => Promise<void>;
+  deleteSchedule: (id: string) => Promise<void>;
+  getScheduleForCourse: (courseId: string) => Schedule[];
+
+  // ── Academic mode: assessment CRUD ───────────────────────────────────────
+  addAssessment: (assessment: Omit<Assessment, 'id' | 'created_at'>) => Promise<void>;
+  updateAssessment: (id: string, changes: Partial<Omit<Assessment, 'id' | 'course_id' | 'created_at'>>) => Promise<void>;
+  deleteAssessment: (id: string) => Promise<void>;
+  getAssessmentsForCourse: (courseId: string) => Assessment[];
+
+  // ── Academic mode: grade CRUD ─────────────────────────────────────────────
+  /** Upsert — one grade per assessment. Adding a grade for an assessment that
+   *  already has one replaces it rather than creating a duplicate. */
+  setGrade: (assessmentId: string, score: number, maxScore: number) => Promise<void>;
+  deleteGrade: (id: string) => Promise<void>;
+
+  // ── Academic mode: derived grade / GPA ────────────────────────────────────
+  /** Weighted percentage + 4.0-scale grade point for one course, computed
+   *  from its assessments' weights and recorded grades. */
+  getCourseGrade: (courseId: string) => CourseGrade;
+  /** Standard 4.0-scale GPA across every currently-active ('in_progress' or
+   *  'not_started', not archived/completed/paused) academic-mode course that
+   *  has at least one graded assessment. Null if none do yet. */
+  getGPA: () => number | null;
 }
 
 // The canvas (`localNodes` / `localEdges`) used to live only in this browser's
@@ -85,6 +132,9 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   roadmaps: [],
   courses: [],
   topics: [],
+  schedules: [],
+  assessments: [],
+  grades: [],
   loading: false,
   localNodes: [],
   localEdges: [],
@@ -122,17 +172,40 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
     try {
       const userId = await getActiveUserId();
       if (!userId) {
-        set({ ...EMPTY_CANVAS, roadmaps: [], courses: [], topics: [], localNodes: [], localEdges: [], loading: false });
+        set({
+          ...EMPTY_CANVAS, roadmaps: [], courses: [], topics: [],
+          schedules: [], assessments: [], grades: [],
+          localNodes: [], localEdges: [], loading: false,
+        });
         return;
       }
 
-      const [{ data: roadmaps }, { data: courses }, { data: topics }, canvas] = await Promise.all([
+      const [
+        { data: roadmaps }, { data: courses }, { data: topics },
+        { data: schedules }, { data: assessments }, { data: grades },
+        canvas,
+      ] = await Promise.all([
         supabase.from('roadmaps').select('*').eq('user_id', userId).order('created_at'),
         supabase.from('courses').select('*').eq('user_id', userId).order('created_at'),
         // Row Level Security scopes topics to this user's courses automatically.
         supabase.from('topics').select('*').order('created_at'),
+        // Same for schedule/assessments/grades — all resolve ownership through
+        // their course, same as topics.
+        supabase.from('schedule').select('*').order('created_at'),
+        supabase.from('assessments').select('*').order('due_date'),
+        supabase.from('grades').select('*').order('created_at'),
         loadUserState<RoadmapCanvas>('roadmap_canvas', EMPTY_CANVAS),
       ]);
+
+      // Normalize courses created before `mode`/`source` existed (or coming
+      // back with the column temporarily missing, e.g. mid-migration): a
+      // course with a roadmap_id came from a template (seeded, courses-mode
+      // by default); anything else was entered by the user directly.
+      const normalizedCourses: Course[] = ((courses as Course[]) ?? []).map(c => ({
+        ...c,
+        mode: c.mode ?? 'courses',
+        source: c.source ?? (c.roadmap_id ? 'seeded' : 'user'),
+      }));
 
       // Back-fill accounts saved before per-path progress existed: without
       // this, the very first template switch after this fix ships would
@@ -145,8 +218,11 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
 
       set({
         roadmaps: (roadmaps as Roadmap[]) ?? [],
-        courses: (courses as Course[]) ?? [],
+        courses: normalizedCourses,
         topics: (topics as Topic[]) ?? [],
+        schedules: (schedules as Schedule[]) ?? [],
+        assessments: (assessments as Assessment[]) ?? [],
+        grades: (grades as Grade[]) ?? [],
         localNodes: canvas.nodes ?? [],
         localEdges: canvas.edges ?? [],
         activeTemplateId: canvas.activeTemplateId ?? null,
@@ -409,6 +485,8 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
 
     const newCourse: Course = {
       ...course,
+      mode: course.mode ?? 'courses',
+      source: course.source ?? 'user',
       id: crypto.randomUUID ? crypto.randomUUID() : `course_${Date.now()}`,
       user_id: userId,
       created_at: new Date().toISOString(),
@@ -433,11 +511,22 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       console.warn('[RoadmapStore] Course delete failed, rolling back:', error.message);
       set({ courses: previous });
     } else {
-      set({ topics: get().topics.filter(t => t.course_id !== id) });
+      // DB-side ON DELETE CASCADE handles schedule/assessments/grades server
+      // side; mirror that in local state too (grades cascade from assessments).
+      const remainingAssessmentIds = new Set(
+        get().assessments.filter(a => a.course_id !== id).map(a => a.id)
+      );
+      set({
+        topics: get().topics.filter(t => t.course_id !== id),
+        schedules: get().schedules.filter(s => s.course_id !== id),
+        assessments: get().assessments.filter(a => a.course_id !== id),
+        grades: get().grades.filter(g => remainingAssessmentIds.has(g.assessment_id)),
+      });
     }
   },
 
   addTemplateAsCourse: async (templateKey: string) => {
+    const isCustomTemplate = Boolean(get().customTemplates[templateKey]);
     const tpl = get().customTemplates[templateKey] || ROADMAP_TEMPLATES[templateKey];
     if (!tpl) throw new Error(`Template ${templateKey} not found`);
 
@@ -460,6 +549,12 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       source_url: tpl.roadmapUrl || undefined,
       start_date: new Date().toISOString().split('T')[0],
       status: 'in_progress',
+      // Sequential/prioritized learning is what a template roadmap is —
+      // Courses mode. A built-in template is 'seeded'; a custom template the
+      // user imported themselves (importRoadmap) is 'user' even though it
+      // goes through this same enrollment path.
+      mode: 'courses',
+      source: isCustomTemplate ? 'user' : 'seeded',
       created_at: now,
     };
 
@@ -499,4 +594,220 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
 
     return newCourse;
   },
+
+  // ── Mode-aware course queries ──────────────────────────────────────────────
+  getCoursesByMode: (mode) => get().courses.filter(c => c.mode === mode),
+
+  getActiveCourses: (mode) => {
+    const active = get().courses.filter(c => c.status === 'not_started' || c.status === 'in_progress');
+    return mode ? active.filter(c => c.mode === mode) : active;
+  },
+
+  // ── Academic mode: schedule CRUD ─────────────────────────────────────────
+  addSchedule: async (schedule) => {
+    const newSchedule: Schedule = {
+      ...schedule,
+      id: crypto.randomUUID ? crypto.randomUUID() : `sched_${Date.now()}`,
+      created_at: new Date().toISOString(),
+    };
+    const previous = get().schedules;
+    set({ schedules: [...previous, newSchedule] });
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('schedule').insert(newSchedule);
+      if (error) {
+        console.warn('[RoadmapStore] Schedule insert failed, rolling back:', error.message);
+        set({ schedules: previous });
+      }
+    }
+  },
+
+  updateSchedule: async (id, changes) => {
+    const previous = get().schedules;
+    set({ schedules: previous.map(s => (s.id === id ? { ...s, ...changes } : s)) });
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('schedule').update(changes).eq('id', id);
+      if (error) {
+        console.warn('[RoadmapStore] Schedule update failed, rolling back:', error.message);
+        set({ schedules: previous });
+      }
+    }
+  },
+
+  deleteSchedule: async (id) => {
+    const previous = get().schedules;
+    set({ schedules: previous.filter(s => s.id !== id) });
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('schedule').delete().eq('id', id);
+      if (error) {
+        console.warn('[RoadmapStore] Schedule delete failed, rolling back:', error.message);
+        set({ schedules: previous });
+      }
+    }
+  },
+
+  getScheduleForCourse: (courseId) => get().schedules.filter(s => s.course_id === courseId),
+
+  // ── Academic mode: assessment CRUD ───────────────────────────────────────
+  addAssessment: async (assessment) => {
+    const newAssessment: Assessment = {
+      ...assessment,
+      id: crypto.randomUUID ? crypto.randomUUID() : `assess_${Date.now()}`,
+      created_at: new Date().toISOString(),
+    };
+    const previous = get().assessments;
+    set({ assessments: [...previous, newAssessment] });
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('assessments').insert(newAssessment);
+      if (error) {
+        console.warn('[RoadmapStore] Assessment insert failed, rolling back:', error.message);
+        set({ assessments: previous });
+      }
+    }
+  },
+
+  updateAssessment: async (id, changes) => {
+    const previous = get().assessments;
+    set({ assessments: previous.map(a => (a.id === id ? { ...a, ...changes } : a)) });
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('assessments').update(changes).eq('id', id);
+      if (error) {
+        console.warn('[RoadmapStore] Assessment update failed, rolling back:', error.message);
+        set({ assessments: previous });
+      }
+    }
+  },
+
+  deleteAssessment: async (id) => {
+    const previousAssessments = get().assessments;
+    const previousGrades = get().grades;
+    set({
+      assessments: previousAssessments.filter(a => a.id !== id),
+      grades: previousGrades.filter(g => g.assessment_id !== id),
+    });
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('assessments').delete().eq('id', id);
+      if (error) {
+        console.warn('[RoadmapStore] Assessment delete failed, rolling back:', error.message);
+        set({ assessments: previousAssessments, grades: previousGrades });
+      }
+      // Grades cascade-delete with their assessment at the DB level (see
+      // migration), so no separate grades delete call is needed here.
+    }
+  },
+
+  getAssessmentsForCourse: (courseId) => get().assessments.filter(a => a.course_id === courseId),
+
+  // ── Academic mode: grade CRUD ─────────────────────────────────────────────
+  setGrade: async (assessmentId, score, maxScore) => {
+    const previous = get().grades;
+    const existing = previous.find(g => g.assessment_id === assessmentId);
+
+    if (existing) {
+      const updated = { ...existing, score, max_score: maxScore };
+      set({ grades: previous.map(g => (g.id === existing.id ? updated : g)) });
+
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from('grades').update({ score, max_score: maxScore }).eq('id', existing.id);
+        if (error) {
+          console.warn('[RoadmapStore] Grade update failed, rolling back:', error.message);
+          set({ grades: previous });
+        }
+      }
+      return;
+    }
+
+    const newGrade: Grade = {
+      id: crypto.randomUUID ? crypto.randomUUID() : `grade_${Date.now()}`,
+      assessment_id: assessmentId,
+      score,
+      max_score: maxScore,
+      created_at: new Date().toISOString(),
+    };
+    set({ grades: [...previous, newGrade] });
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('grades').insert(newGrade);
+      if (error) {
+        console.warn('[RoadmapStore] Grade insert failed, rolling back:', error.message);
+        set({ grades: previous });
+      }
+    }
+  },
+
+  deleteGrade: async (id) => {
+    const previous = get().grades;
+    set({ grades: previous.filter(g => g.id !== id) });
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('grades').delete().eq('id', id);
+      if (error) {
+        console.warn('[RoadmapStore] Grade delete failed, rolling back:', error.message);
+        set({ grades: previous });
+      }
+    }
+  },
+
+  // ── Academic mode: derived grade / GPA ────────────────────────────────────
+  getCourseGrade: (courseId) => {
+    const { assessments, grades } = get();
+    const courseAssessments = assessments.filter(a => a.course_id === courseId);
+
+    let weightedScoreSum = 0;
+    let weightGraded = 0;
+
+    for (const assessment of courseAssessments) {
+      const grade = grades.find(g => g.assessment_id === assessment.id);
+      if (!grade || grade.max_score <= 0) continue;
+      const pct = grade.score / grade.max_score;
+      weightedScoreSum += pct * assessment.weight;
+      weightGraded += assessment.weight;
+    }
+
+    if (weightGraded <= 0) {
+      return { course_id: courseId, percentage: null, gradePoint: null, weightGraded: 0 };
+    }
+
+    // Normalize by the weight actually graded so an ungraded final exam
+    // doesn't drag today's percentage toward zero before it's been taken.
+    const percentage = (weightedScoreSum / weightGraded) * 100;
+
+    return {
+      course_id: courseId,
+      percentage,
+      gradePoint: percentageToGradePoint(percentage),
+      weightGraded,
+    };
+  },
+
+  getGPA: () => {
+    const activeAcademicCourses = get().getActiveCourses('academic');
+    const gradePoints = activeAcademicCourses
+      .map(c => get().getCourseGrade(c.id).gradePoint)
+      .filter((gp): gp is number => gp !== null);
+
+    if (gradePoints.length === 0) return null;
+    return gradePoints.reduce((sum, gp) => sum + gp, 0) / gradePoints.length;
+  },
 }));
+
+/** Standard 4.0-scale conversion from a weighted percentage. */
+function percentageToGradePoint(percentage: number): number {
+  if (percentage >= 93) return 4.0;
+  if (percentage >= 90) return 3.7;
+  if (percentage >= 87) return 3.3;
+  if (percentage >= 83) return 3.0;
+  if (percentage >= 80) return 2.7;
+  if (percentage >= 77) return 2.3;
+  if (percentage >= 73) return 2.0;
+  if (percentage >= 70) return 1.7;
+  if (percentage >= 67) return 1.3;
+  if (percentage >= 63) return 1.0;
+  if (percentage >= 60) return 0.7;
+  return 0.0;
+}

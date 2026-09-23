@@ -25,6 +25,21 @@ export interface Roadmap {
 // ─── Course ──────────────────────────────────────────────────────────────────
 export type CourseStatus = 'not_started' | 'in_progress' | 'completed' | 'paused';
 
+/**
+ * 'courses'  — sequential/prioritized self-directed learning (the original
+ *              model): topics build on each other, one roadmap graph per course.
+ * 'academic' — concurrent college-style courses (Linear Algebra, Probability,
+ *              etc. running in the same term): no dependency chain between
+ *              courses; each has its own timetable, assessments and grades.
+ * Both modes coexist on the same account — this is a display/behavior split,
+ * not a separate data store.
+ */
+export type CourseMode = 'academic' | 'courses';
+
+/** Orthogonal to `mode`: whether this course came from a built-in template
+ *  (seeded) or was entered by the user themselves. */
+export type CourseSource = 'seeded' | 'user';
+
 export interface Course {
   id: string;
   user_id: string;
@@ -33,7 +48,68 @@ export interface Course {
   source_url?: string;
   start_date?: string;
   status: CourseStatus;
+  /** Defaults to 'courses' for any row created before this field existed —
+   *  see roadmapStore's normalization on fetch. */
+  mode: CourseMode;
+  /** Defaults to 'user' for pre-existing rows without a roadmap_id, 'seeded'
+   *  for those enrolled from a built-in template — see roadmapStore. */
+  source: CourseSource;
   created_at: string;
+}
+
+// ─── Academic mode: schedule / assessments / grades ──────────────────────────
+export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday ... 6 = Saturday
+
+/** One recurring weekly class slot for an academic-mode course. A course can
+ *  have several (e.g. a lecture + a lab on different days). */
+export interface Schedule {
+  id: string;
+  course_id: string;
+  day_of_week: DayOfWeek;
+  /** 24h "HH:MM" */
+  start_time: string;
+  /** 24h "HH:MM" */
+  end_time: string;
+  location?: string;
+  created_at: string;
+}
+
+export type AssessmentType = 'exam' | 'assignment' | 'quiz';
+
+/** An exam/assignment/quiz belonging to an academic-mode course. */
+export interface Assessment {
+  id: string;
+  course_id: string;
+  title: string;
+  type: AssessmentType;
+  due_date: string; // ISO date "YYYY-MM-DD"
+  /** Fraction of the course grade this is worth, 0–1 (e.g. 0.25 = 25%). */
+  weight: number;
+  created_at: string;
+}
+
+/** The recorded score for one assessment. At most one per assessment. */
+export interface Grade {
+  id: string;
+  assessment_id: string;
+  score: number;
+  max_score: number;
+  created_at: string;
+}
+
+/** Derived (not persisted): a course's weighted percentage + 4.0-scale grade
+ *  point, computed from its assessments/grades. See roadmapStore.getCourseGrade. */
+export interface CourseGrade {
+  course_id: string;
+  /** Weighted percentage across graded assessments only, 0–100. Null if
+   *  nothing has been graded yet. */
+  percentage: number | null;
+  /** Standard 4.0-scale grade point corresponding to `percentage`. Null if
+   *  `percentage` is null. */
+  gradePoint: number | null;
+  /** Sum of `weight` across assessments that have a recorded grade — lets
+   *  callers show "graded 60% of the course so far" type context. */
+  weightGraded: number;
 }
 
 // ─── Topic ───────────────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import { AppLayout } from './components/layout/AppLayout';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
+import { Timetable } from './pages/Timetable';
 import { Courses } from './pages/Courses';
 import { Notes } from './pages/Notes';
 import { Projects } from './pages/Projects';
@@ -31,6 +32,7 @@ const ProtectedRoutes = () => {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/"          element={<Home />} />
+        <Route path="/timetable" element={<Timetable />} />
         <Route path="/courses"   element={<Courses />} />
         <Route path="/notes"     element={<Notes />} />
         <Route path="/projects"  element={<Projects />} />
