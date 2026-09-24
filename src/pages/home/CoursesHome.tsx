@@ -1,13 +1,14 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Flame, Clock, Target, Plus, Zap, ArrowRight,
-  CheckCircle2, Compass, PenLine, Sparkles,
+  Flame, Clock, Target, Plus, ArrowRight,
+  Compass, PenLine, Sparkles,
   GitFork, FolderKanban, BarChart2
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Heatmap } from '../../components/analytics/Heatmap';
+import { FocusWidget } from '../../components/focus/FocusWidget';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
@@ -166,54 +167,13 @@ export const CoursesHome: React.FC = () => {
         {/* Left Column (2/3): Today's Active Focus */}
         <div className="lg:col-span-2 space-y-4">
           {activeTopic ? (
-            <Card padding="p-6" hover={false}>
-              <div className="flex items-center justify-between pb-4 mb-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  <Zap size={14} className="text-accent-amber" />
-                  <span>Today's Learning Focus</span>
-                </div>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-accent-tertiary/10 text-accent-tertiary border border-accent-tertiary/20">
-                  Phase: {activeTopic.phase || 'Core Curriculum'}
-                </span>
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <h3 className="text-lg font-bold text-white tracking-tight">
-                    {activeTopic.label}
-                  </h3>
-                  <p className="text-xs text-zinc-400 max-w-lg leading-relaxed">
-                    Master key concepts, log study sessions, and advance your structured learning path.
-                  </p>
-                  <div className="flex items-center gap-3 pt-2 text-xs text-zinc-500 font-medium">
-                    <span className="flex items-center gap-1 text-emerald-400">
-                      <CheckCircle2 size={13} /> Prerequisites Met
-                    </span>
-                    <span>·</span>
-                    <span>Est. Session: 25-45 mins</span>
-                  </div>
-                </div>
-
-                <div className="flex sm:flex-col gap-2 flex-shrink-0">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={<Target size={14} />}
-                    onClick={() => navigate('/tracker')}
-                  >
-                    Start Timer
-                  </Button>
-                  <Button
-                    variant="tonal"
-                    size="sm"
-                    icon={<PenLine size={14} />}
-                    onClick={() => navigate('/notes')}
-                  >
-                    Open Notes
-                  </Button>
-                </div>
-              </div>
-            </Card>
+            <FocusWidget
+              title="Today's Learning Focus"
+              subjectLabel={activeTopic.label}
+              subjectSubtitle="Master key concepts, log study sessions, and advance your structured learning path."
+              metaLabel={`Phase: ${activeTopic.phase || 'Core Curriculum'}`}
+              topicId={activeTopic.id}
+            />
           ) : (
             <Card padding="p-6" hover={false} className="bg-gradient-to-br from-[#131722] to-[#161D2B] border-white/10 relative overflow-hidden">
               <div className="flex items-center justify-between pb-4 mb-4">

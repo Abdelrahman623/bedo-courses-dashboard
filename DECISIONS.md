@@ -150,6 +150,48 @@ pattern as the other two Academic Home cards.
 Not done here (remaining Tier 4 item): the Courses-mode multi-roadmap
 switcher.
 
+## Tier 5 — Focus mode (item 1 of 3)
+
+**Task**: "merge Pomodoro timer + Today's Focus card, mode-aware."
+
+**What changed**: `src/components/focus/FocusWidget.tsx` (new) embeds the live
+timer — ring, Start/Pause/Reset/Done — directly into the Home card that used
+to just be static text plus a "Start Timer" button linking out to
+`/tracker`. `CoursesHome`'s "Today's Learning Focus" card now renders it
+against the active in-progress roadmap topic (`topicId`); `AcademicHome`
+gets a new "Focus Mode" card the master plan didn't have before, targeting
+today's next class, falling back to the nearest deadline, falling back to
+an untargeted "General Study Session" when neither exists — that's the
+mode-aware half of the task, since a topic-based subject has no meaning in
+Academic mode. `/tracker` still exists unchanged for history, manual entry,
+break timers, and the 7-day chart; the widget links out to it via a "Full
+Tracker" affordance rather than duplicating that surface.
+
+**Bug this surfaced and fixed**: `sessionStore`'s ticking `setInterval` used
+to live inside `Tracker.tsx`'s `useEffect`, so a running timer silently
+stopped counting down the moment you navigated away from that one page —
+Home's new widget would have shown stale, frozen seconds. Moved the interval
+to `AppLayout.tsx` (mounted for the whole authenticated session) and removed
+the now-duplicate one from `Tracker.tsx`. `timerRunning`/`timerSeconds`
+themselves were always global Zustand state; only the thing driving the
+countdown was page-scoped, which is now fixed as a side effect of this task
+rather than a separate bug ticket.
+
+**`ownsTimer` guard**: if a session is already running against a different
+course/topic than the one a given widget represents, that widget shows "A
+different session is running" and disables Start (to avoid silently
+clobbering the running session's start time) and Reset/Done (nothing of
+this widget's to reset/complete) — but still shows the global Start/Pause
+affordance correctly once state matches. This only matters when two
+Home-style widgets could theoretically both be visible against different
+subjects; today that's Courses-mode vs Academic-mode Home, which are never
+rendered at once, so in practice it's dormant defensive code for whenever a
+second concurrent widget (e.g. per-course Focus buttons on `Courses.tsx`)
+gets added.
+
+**Not done here** (remaining Tier 5 items): weekly review / spaced
+repetition, D3 force-graph scaling for larger/multiple roadmaps.
+
 ## Tier 2 — store boundaries
 
 **Question**: does the roadmap/course store hold courses from both modes

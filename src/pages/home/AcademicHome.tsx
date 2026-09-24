@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { FocusWidget } from '../../components/focus/FocusWidget';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import { useAuth } from '../../hooks/useAuth';
 import type { Assessment, Course, Schedule } from '../../types';
@@ -157,6 +158,30 @@ export const AcademicHome: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Focus instrument, mode-aware: next class today, else nearest
+          deadline, else a plain untargeted session ───────────────── */}
+      <FocusWidget
+        title="Focus Mode"
+        subjectLabel={
+          todaysClasses[0]
+            ? (coursesById.get(todaysClasses[0].course_id)?.title ?? 'Untitled course')
+            : upcomingDeadlines[0]
+              ? upcomingDeadlines[0].assessment.title
+              : 'General Study Session'
+        }
+        subjectSubtitle={
+          todaysClasses[0]
+            ? `${formatTime(todaysClasses[0].start_time)} – ${formatTime(todaysClasses[0].end_time)}${todaysClasses[0].location ? ` · ${todaysClasses[0].location}` : ''}`
+            : upcomingDeadlines[0]
+              ? `${coursesById.get(upcomingDeadlines[0].assessment.course_id)?.title ?? 'Untitled course'} · ${ASSESSMENT_TYPE_LABEL[upcomingDeadlines[0].assessment.type]}`
+              : 'No classes or deadlines today — logged time still counts toward your weekly total.'
+        }
+        metaLabel={
+          todaysClasses[0] ? "Today's Class" : upcomingDeadlines[0] ? deadlineLabel(upcomingDeadlines[0].days) : undefined
+        }
+        courseId={todaysClasses[0]?.course_id ?? upcomingDeadlines[0]?.assessment.course_id}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* ── Today's classes ─────────────────────────────────────── */}

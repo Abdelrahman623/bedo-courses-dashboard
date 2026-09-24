@@ -29,6 +29,20 @@ export const AppLayout: React.FC = () => {
   const fetchNotes    = useNotesStore(s => s.fetchNotes);
   const fetchProjects = useProjectsStore(s => s.fetchProjects);
   const fetchSessions = useSessionStore(s => s.fetchSessions);
+  const timerRunning  = useSessionStore(s => s.timerRunning);
+  const tickTimer     = useSessionStore(s => s.tickTimer);
+
+  // The Pomodoro/stopwatch instrument is usable from more than one screen
+  // now (Home's Focus card, the full Tracker page), so the ticking interval
+  // lives here — mounted for the whole authenticated session — instead of
+  // inside Tracker.tsx. A timer started from Home keeps counting down if
+  // you navigate to Notes and back, rather than freezing because the one
+  // component with a setInterval unmounted.
+  useEffect(() => {
+    if (!timerRunning) return;
+    const interval = setInterval(() => tickTimer(), 1000);
+    return () => clearInterval(interval);
+  }, [timerRunning, tickTimer]);
 
   // Nothing is cached in the browser any more, so this is where the signed-in
   // account's data is loaded — once, on entry, and again whenever the account

@@ -35,7 +35,7 @@ export const Tracker: React.FC = () => {
   const {
     sessions, activity, timerRunning, timerMode, timerSeconds, weeklyMins,
     currentStreak, longestStreak, startTimer, pauseTimer, stopTimer, resetTimer,
-    tickTimer, setTimerMode, logManualSession, deleteSession, updateSession, fetchSessions,
+    setTimerMode, logManualSession, deleteSession, updateSession, fetchSessions,
   } = useSessionStore();
 
   const { localNodes } = useRoadmapStore();
@@ -66,14 +66,11 @@ export const Tracker: React.FC = () => {
     fetchSessions();
   }, [fetchSessions]);
 
-  // Real-time ticking interval
-  useEffect(() => {
-    if (!timerRunning) return;
-    const interval = setInterval(() => {
-      tickTimer();
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [timerRunning, tickTimer]);
+  // Ticking interval now lives in AppLayout (mounted for the whole session,
+  // not just this page) so a timer started from Home's Focus card keeps
+  // counting down across navigation. `tickTimer` itself is unused here as a
+  // result — `timerSeconds` just reflects whatever AppLayout's interval
+  // last wrote to the store.
 
   // Mode total durations
   const totalModeSecs: Record<TimerMode, number> = {
