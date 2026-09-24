@@ -61,23 +61,23 @@ export const FocusWidget: React.FC<FocusWidgetProps> = ({
 
   return (
     <Card padding="p-6" hover={false}>
-      <div className="flex items-center justify-between pb-4 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-4 mb-4">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
           <Zap size={14} className="text-accent-amber" />
           <span>{title}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {metaLabel && (
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-accent-tertiary/10 text-accent-tertiary border border-accent-tertiary/20">
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-accent-tertiary/10 text-accent-tertiary border border-accent-tertiary/20 truncate max-w-[160px]">
               {metaLabel}
             </span>
           )}
           <button
             onClick={() => navigate('/tracker')}
-            className="flex items-center gap-1 text-[11px] font-medium text-zinc-500 hover:text-white transition-colors cursor-pointer"
+            className="flex items-center gap-1 text-[11px] font-medium text-zinc-500 hover:text-white transition-colors cursor-pointer flex-shrink-0"
             title="Open full Tracker (history, manual entry, break timers)"
           >
-            Full Tracker <ArrowUpRight size={12} />
+            <span className="hidden sm:inline">Full Tracker</span> <ArrowUpRight size={12} />
           </button>
         </div>
       </div>
