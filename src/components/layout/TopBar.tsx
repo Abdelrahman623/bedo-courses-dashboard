@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, LogOut, Sparkles, Flame, Target, Compass, FileText, CheckCheck, X, Menu } from 'lucide-react';
+import { Bell, LogOut, Sparkles, Flame, Target, Compass, FileText, CheckCheck, X, Menu, GraduationCap, Route } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
 import { useSessionStore } from '../../store/sessionStore';
@@ -11,6 +11,9 @@ import { loadUserState, queueUserState } from '../../lib/userState';
 
 const PAGE_TITLES: Record<string, string> = {
   '/':          'Overview',
+  '/timetable': 'Timetable & Schedule',
+  '/deadlines': 'Deadlines & Exams',
+  '/grades':    'Grades & GPA',
   '/courses':   'Courses & Roadmap',
   '/notes':     'Notes Workspace',
   '/projects':  'Projects & Portfolio',
@@ -38,6 +41,8 @@ export const TopBar: React.FC = () => {
   const { localNodes } = useRoadmapStore();
   const { notes } = useNotesStore();
   const toggleMobileSidebar = useUIStore(s => s.toggleMobileSidebar);
+  const mode = useUIStore(s => s.mode);
+  const setMode = useUIStore(s => s.setMode);
 
   const [showMenu, setShowMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -239,6 +244,44 @@ export const TopBar: React.FC = () => {
 
       {/* Actions */}
       <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+        {/* Mode Switcher */}
+        <div
+          role="tablist"
+          aria-label="Operating Mode"
+          className="flex bg-white/[0.04] border border-white/[0.08] rounded-lg p-0.5"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'courses'}
+            onClick={() => setMode('courses')}
+            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
+              mode === 'courses'
+                ? 'bg-accent-amber/15 text-accent-amber border border-accent-amber/30'
+                : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+            }`}
+            title="Courses Mode: Sequential Roadmaps"
+          >
+            <Route size={12} />
+            <span className="hidden sm:inline">Courses</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'academic'}
+            onClick={() => setMode('academic')}
+            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
+              mode === 'academic'
+                ? 'bg-accent-amber/15 text-accent-amber border border-accent-amber/30'
+                : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+            }`}
+            title="Academic Mode: Concurrent College Term"
+          >
+            <GraduationCap size={12} />
+            <span className="hidden sm:inline">Academic</span>
+          </button>
+        </div>
+
         {/* Notifications Center */}
         <div className="relative">
           <button

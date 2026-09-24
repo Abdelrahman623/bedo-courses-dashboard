@@ -251,6 +251,19 @@ export const Courses: React.FC = () => {
     [courses, primaryCourse]
   );
 
+  // Every Courses-mode course that has a roadmap graph behind it (seeded
+  // template or a custom import) — each keeps its own progress snapshot in
+  // progressByTemplate, so this switcher just points loadTemplate() at a
+  // different one rather than sharing a single graph across all of them.
+  const roadmapCourses = useMemo(
+    () =>
+      courses
+        .filter(c => c.mode === 'courses')
+        .map(c => ({ course: c, tpl: findTemplateForCourse(c) }))
+        .filter((x): x is { course: Course; tpl: RoadmapTemplate } => Boolean(x.tpl)),
+    [courses, findTemplateForCourse]
+  );
+
   // Notes tied to the Primary Path Hero Card
   const primaryNotes = useMemo(() => {
     if (primaryCourse) {
@@ -638,6 +651,31 @@ export const Courses: React.FC = () => {
       {/* ── Roadmap View ──────────────────────────────────────────────────── */}
       {activeView === 'roadmap' && (
         <div className="flex-1 overflow-hidden flex flex-col">
+          {/* Course switcher — each enrolled Courses-mode course keeps its own
+              graph and progress; this only swaps which one is on screen. */}
+          {roadmapCourses.length > 1 && (
+            <div className="flex items-center gap-1.5 px-6 pt-3 pb-1 flex-shrink-0 overflow-x-auto">
+              {roadmapCourses.map(({ course, tpl }) => {
+                const isActive = tpl.id === activeTemplateId;
+                return (
+                  <button
+                    key={course.id}
+                    onClick={() => loadTemplate(tpl.id)}
+                    title={course.title}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 border ${
+                      isActive
+                        ? 'bg-accent-amber/15 text-accent-amber border-accent-amber/40'
+                        : 'bg-white/[0.04] text-zinc-400 border-white/[0.08] hover:bg-white/[0.08] hover:text-zinc-200'
+                    }`}
+                  >
+                    <span>{tpl.icon}</span>
+                    <span className="max-w-[160px] truncate">{course.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Stats strip (only if nodes exist) */}
           {totalTopics > 0 && (
             <div className="flex items-center gap-6 px-6 py-2.5 bg-bg-surface/30 flex-shrink-0">
