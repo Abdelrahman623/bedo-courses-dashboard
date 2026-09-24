@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, BookOpen, ExternalLink, Calendar, Trash2, Sparkles, Search, Layers, Upload, CheckCircle2, ChevronRight, FileText, ArrowRight, StickyNote } from 'lucide-react';
+import { Plus, BookOpen, ExternalLink, Calendar, Trash2, Sparkles, Search, Layers, Upload, CheckCircle2, ChevronRight, FileText, ArrowRight, StickyNote, GraduationCap, CalendarDays, CalendarClock, Route } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -12,8 +12,9 @@ import { RoadmapGraph } from '../components/roadmap/RoadmapGraph';
 import { useRoadmapStore } from '../store/roadmapStore';
 import { useSessionStore } from '../store/sessionStore';
 import { useNotesStore } from '../store/notesStore';
+import { useUIStore } from '../store/uiStore';
 import { pct, formatDate, minsToHHMM, safeUrl } from '../lib/utils';
-import type { Course, CourseStatus, TopicStatus, RoadmapNode, RoadmapEdge, Note } from '../types';
+import type { Course, CourseMode, CourseStatus, TopicStatus, RoadmapNode, RoadmapEdge, Note } from '../types';
 import { ROADMAP_TEMPLATES, type RoadmapTemplate } from '../data/roadmapTemplates';
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } };
@@ -24,6 +25,7 @@ const EMPTY_COURSE_FORM = {
   source_url: '',
   start_date: new Date().toISOString().split('T')[0],
   status: 'in_progress' as CourseStatus,
+  mode: 'courses' as CourseMode,
 };
 
 const EMPTY_TOPIC_FORM = {
@@ -47,11 +49,13 @@ const TEMPLATE_CATEGORIES = [
 
 export const Courses: React.FC = () => {
   const navigate = useNavigate();
+  const uiMode = useUIStore(s => s.mode);
   const {
     courses, topics, localNodes, fetchAll, addCourse, deleteCourse,
     addTopic, loadTemplate, clearRoadmap, importRoadmap,
     addTemplateAsCourse, activeTemplateId, getActiveCourseId,
     customTemplates, deleteCustomTemplate,
+    schedules, assessments, getCourseGrade, getGPA,
   } = useRoadmapStore();
   const { sessions } = useSessionStore();
   const { notes, setActiveNote, createNote, deleteNote, fetchNotes } = useNotesStore();
@@ -105,6 +109,14 @@ export const Courses: React.FC = () => {
   const [courseForm, setCourseForm] = useState(EMPTY_COURSE_FORM);
   const [topicForm, setTopicForm] = useState(EMPTY_TOPIC_FORM);
   const [saving, setSaving] = useState(false);
+
+  const openAddCourse = (modeOverride?: CourseMode) => {
+    setCourseForm({
+      ...EMPTY_COURSE_FORM,
+      mode: modeOverride ?? uiMode,
+    });
+    setShowCourseModal(true);
+  };
 
   // Delete Course Confirmation
   const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
@@ -243,13 +255,25 @@ export const Courses: React.FC = () => {
     return courses[0] || null;
   }, [activeTemplate, courses, getActiveCourseId]);
 
+  const coursesModeCourses = useMemo(
+    () => courses.filter(c => c.mode === 'courses'),
+    [courses]
+  );
+
+  const academicCourses = useMemo(
+    () => courses.filter(c => c.mode === 'academic'),
+    [courses]
+  );
+
   // Courses shown in "Additional Enrolled Courses" — excludes whichever one
   // is already the Primary Path hero card above, so enrolling your active
   // template doesn't also duplicate it into the list below.
   const additionalCourses = useMemo(
-    () => courses.filter(c => c.id !== primaryCourse?.id),
-    [courses, primaryCourse]
+    () => coursesModeCourses.filter(c => c.id !== primaryCourse?.id),
+    [coursesModeCourses, primaryCourse]
   );
+
+  const academicGPA = getGPA();
 
   // Every Courses-mode course that has a roadmap graph behind it (seeded
   // template or a custom import) — each keeps its own progress snapshot in
@@ -350,10 +374,11 @@ export const Courses: React.FC = () => {
       source_url: courseForm.source_url.trim() || undefined,
       start_date: courseForm.start_date,
       status: courseForm.status,
+      mode: courseForm.mode,
     });
     setSaving(false);
     setShowCourseModal(false);
-    setCourseForm(EMPTY_COURSE_FORM);
+    setCourseForm({ ...EMPTY_COURSE_FORM, mode: uiMode });
   };
 
   const handleAddTopic = async (e: React.FormEvent) => {
@@ -526,35 +551,87 @@ export const Courses: React.FC = () => {
     <div className="flex flex-col h-full">
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 flex-shrink-0 bg-bg-surface/40">
-        {/* Switch View Tabs */}
-        <div className="flex bg-[#0D1017] rounded-xl border border-white/[0.08] p-1 gap-1">
-          <button
-            onClick={() => setActiveView('roadmap')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeView === 'roadmap'
-                ? 'bg-accent-amber text-[#0D0F14] shadow-sm'
-                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
-            }`}
-          >
-            <span>🗺️</span>
-            <span>Roadmap</span>
-          </button>
-          <button
-            onClick={() => setActiveView('courses')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeView === 'courses'
-                ? 'bg-accent-amber text-[#0D0F14] shadow-sm'
-                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
-            }`}
-          >
-            <span>📚</span>
-            <span>Courses</span>
-          </button>
-        </div>
+        {uiMode === 'academic' ? (
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-accent-amber/15 border border-accent-amber/30 flex items-center justify-center text-accent-amber">
+              <GraduationCap size={16} />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-white flex items-center gap-2">
+                <span>Academic Term Courses</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-accent-amber/10 text-accent-amber border border-accent-amber/20 font-semibold">
+                  {academicCourses.length} ACTIVE
+                </span>
+              </div>
+              <p className="text-[11px] text-zinc-400">Concurrent college subjects, schedules, deadlines and grades</p>
+            </div>
+          </div>
+        ) : (
+          /* Switch View Tabs */
+          <div className="flex bg-[#0D1017] rounded-xl border border-white/[0.08] p-1 gap-1">
+            <button
+              onClick={() => setActiveView('roadmap')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeView === 'roadmap'
+                  ? 'bg-accent-amber text-[#0D0F14] shadow-sm'
+                  : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
+              }`}
+            >
+              <span>🗺️</span>
+              <span>Roadmap</span>
+            </button>
+            <button
+              onClick={() => setActiveView('courses')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeView === 'courses'
+                  ? 'bg-accent-amber text-[#0D0F14] shadow-sm'
+                  : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
+              }`}
+            >
+              <span>📚</span>
+              <span>Courses</span>
+            </button>
+          </div>
+        )}
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2">
-          {activeView === 'roadmap' ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          {uiMode === 'academic' ? (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<CalendarDays size={13} className="text-accent-secondary" />}
+                onClick={() => navigate('/timetable')}
+              >
+                Timetable
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<CalendarClock size={13} className="text-accent-highlight" />}
+                onClick={() => navigate('/deadlines')}
+              >
+                Deadlines
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<GraduationCap size={13} className="text-accent-amber" />}
+                onClick={() => navigate('/grades')}
+              >
+                Grades
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Plus size={14} />}
+                onClick={() => openAddCourse('academic')}
+              >
+                + Add Academic Course
+              </Button>
+            </>
+          ) : activeView === 'roadmap' ? (
             <>
               {activeTemplate && (
                 <Button
@@ -604,7 +681,7 @@ export const Courses: React.FC = () => {
                 variant="primary"
                 size="sm"
                 icon={<Plus size={14} />}
-                onClick={() => setShowCourseModal(true)}
+                onClick={() => openAddCourse('courses')}
               >
                 Custom Course
               </Button>
@@ -648,8 +725,210 @@ export const Courses: React.FC = () => {
       )}
 
 
-      {/* ── Roadmap View ──────────────────────────────────────────────────── */}
-      {activeView === 'roadmap' && (
+      {/* ── Academic Mode View ────────────────────────────────────────────── */}
+      {uiMode === 'academic' && (
+        <div className="flex-1 overflow-y-auto p-6">
+          <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-5xl mx-auto">
+            {/* KPI Strip */}
+            <motion.div variants={item}>
+              <div className="bg-[#131722] border border-white/[0.08] rounded-xl overflow-hidden shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
+                <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.08]">
+                  <div className="p-4">
+                    <span className="text-xs text-zinc-400 font-medium">Term Courses</span>
+                    <div className="mt-2 text-2xl font-bold font-mono text-white">
+                      {academicCourses.length}
+                    </div>
+                    <span className="text-[10px] text-zinc-500">Concurrent college subjects</span>
+                  </div>
+
+                  <div className="p-4">
+                    <span className="text-xs text-zinc-400 font-medium">Scheduled Classes</span>
+                    <div className="mt-2 text-2xl font-bold font-mono text-accent-secondary">
+                      {academicCourses.reduce((sum, c) => sum + schedules.filter(s => s.course_id === c.id).length, 0)}
+                    </div>
+                    <span className="text-[10px] text-zinc-500">Weekly class sessions</span>
+                  </div>
+
+                  <div className="p-4">
+                    <span className="text-xs text-zinc-400 font-medium">Assessments & Exams</span>
+                    <div className="mt-2 text-2xl font-bold font-mono text-accent-highlight">
+                      {academicCourses.reduce((sum, c) => sum + assessments.filter(a => a.course_id === c.id).length, 0)}
+                    </div>
+                    <span className="text-[10px] text-zinc-500">Exams, quizzes & homework</span>
+                  </div>
+
+                  <div className="p-4">
+                    <span className="text-xs text-zinc-400 font-medium">Current Term GPA</span>
+                    <div className="mt-2 text-2xl font-bold font-mono text-accent-amber">
+                      {academicGPA !== null ? academicGPA.toFixed(2) : '—'}
+                    </div>
+                    <span className="text-[10px] text-zinc-500">Standard 4.0 scale</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Courses List */}
+            <motion.div variants={item}>
+              <div className="rounded-2xl border border-white/[0.08] bg-[#0A0D14]/60 p-6 space-y-4 shadow-lg">
+                <div className="flex items-center justify-between gap-4 flex-wrap pb-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                      <GraduationCap size={16} className="text-accent-amber" />
+                      <span>Enrolled College Courses</span>
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      College semester courses running concurrently without prerequisite dependencies
+                    </p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<Plus size={14} />}
+                    onClick={() => openAddCourse('academic')}
+                  >
+                    + Add Academic Course
+                  </Button>
+                </div>
+
+                {academicCourses.length > 0 ? (
+                  <div className="space-y-3 pt-1">
+                    {academicCourses.map(course => {
+                      const courseSchedules = schedules.filter(s => s.course_id === course.id);
+                      const courseAssessments = assessments.filter(a => a.course_id === course.id);
+                      const courseGrade = getCourseGrade(course.id);
+                      const courseNotes = getNotesForCourse(course.id);
+
+                      return (
+                        <Card key={course.id} padding="p-4" className="bg-[#0E121B]/80 hover:bg-[#121722] border-white/[0.06] transition-all">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <Badge status={course.status} />
+                                <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-accent-amber/10 text-accent-amber border border-accent-amber/20 font-medium">
+                                  <GraduationCap size={10} />
+                                  <span>Academic</span>
+                                </span>
+                                {course.start_date && (
+                                  <span className="flex items-center gap-1 text-[10px] text-txt-muted">
+                                    <Calendar size={10} /> Term {formatDate(course.start_date)}
+                                  </span>
+                                )}
+                              </div>
+                              <h4 className="font-semibold text-white text-sm tracking-tight truncate">{course.title}</h4>
+                              <div className="flex items-center gap-4 mt-2 text-xs text-txt-muted flex-wrap">
+                                <button
+                                  onClick={() => navigate('/timetable')}
+                                  className="flex items-center gap-1 text-zinc-400 hover:text-accent-secondary transition-colors cursor-pointer"
+                                  title="View timetable for this course"
+                                >
+                                  <CalendarDays size={12} className="text-accent-secondary" />
+                                  <span className="font-mono">{courseSchedules.length}</span> weekly class session{courseSchedules.length === 1 ? '' : 's'}
+                                </button>
+
+                                <button
+                                  onClick={() => navigate('/deadlines')}
+                                  className="flex items-center gap-1 text-zinc-400 hover:text-accent-highlight transition-colors cursor-pointer"
+                                  title="View deadlines for this course"
+                                >
+                                  <CalendarClock size={12} className="text-accent-highlight" />
+                                  <span className="font-mono">{courseAssessments.length}</span> assessment{courseAssessments.length === 1 ? '' : 's'}
+                                </button>
+
+                                <button
+                                  onClick={() => navigate('/grades')}
+                                  className="flex items-center gap-1 text-zinc-400 hover:text-accent-amber transition-colors cursor-pointer"
+                                  title="View grade calculation for this course"
+                                >
+                                  <GraduationCap size={12} className="text-accent-amber" />
+                                  {courseGrade.percentage !== null ? (
+                                    <span>
+                                      Grade: <strong className="text-accent-amber font-mono">{courseGrade.percentage.toFixed(1)}%</strong> ({courseGrade.gradePoint?.toFixed(1)} pts)
+                                    </span>
+                                  ) : (
+                                    <span className="text-zinc-500">Ungraded</span>
+                                  )}
+                                </button>
+
+                                <span className="flex items-center gap-1 text-zinc-400">
+                                  <FileText size={11} className={courseNotes.length > 0 ? "text-accent-amber" : "text-zinc-500"} />
+                                  <strong className={courseNotes.length > 0 ? "text-accent-amber font-mono" : "text-zinc-400 font-mono"}>
+                                    {courseNotes.length}
+                                  </strong> linked note{courseNotes.length === 1 ? '' : 's'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap sm:flex-shrink-0">
+                              <button
+                                onClick={() => setSelectedCourseForNotes(course)}
+                                className={`px-3 py-1.5 rounded-lg text-xs border transition-all font-medium flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                                  courseNotes.length > 0
+                                    ? 'bg-accent-amber/10 hover:bg-accent-amber/20 text-accent-amber border-accent-amber/30'
+                                    : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border-white/[0.08] hover:border-white/20'
+                                }`}
+                                title={`View notes for ${course.title}`}
+                              >
+                                <FileText size={13} className={courseNotes.length > 0 ? "text-accent-amber" : "text-zinc-400"} />
+                                <span>Notes</span>
+                                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                                  courseNotes.length > 0 ? 'bg-accent-amber/20 text-accent-amber' : 'bg-white/5 text-zinc-400'
+                                }`}>
+                                  {courseNotes.length}
+                                </span>
+                              </button>
+
+                              <button
+                                onClick={() => navigate('/timetable')}
+                                className="px-3 py-1.5 rounded-lg text-xs bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
+                                title="Open in Timetable"
+                              >
+                                <CalendarDays size={13} className="text-accent-secondary" />
+                                <span>Schedule</span>
+                              </button>
+
+                              <button
+                                onClick={() => setDeletingCourseId(course.id)}
+                                className="p-2 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                                title="Delete course"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 px-6">
+                    <div className="w-12 h-12 rounded-2xl bg-accent-amber/10 border border-accent-amber/20 flex items-center justify-center mx-auto mb-3">
+                      <GraduationCap size={24} className="text-accent-amber" />
+                    </div>
+                    <p className="text-sm font-semibold text-zinc-200 mb-1">
+                      No academic courses added yet
+                    </p>
+                    <p className="text-xs text-zinc-400 max-w-sm mx-auto mb-5 leading-relaxed">
+                      Add your term classes (e.g. Linear Algebra, Probability, Data Structures) to start tracking schedules, assignment due dates, and your overall GPA.
+                    </p>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<Plus size={14} />}
+                      onClick={() => openAddCourse('academic')}
+                    >
+                      + Add Academic Course
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ── Courses Mode: Roadmap View ────────────────────────────────────────── */}
+      {uiMode === 'courses' && activeView === 'roadmap' && (
         <div className="flex-1 overflow-hidden flex flex-col">
           {/* Course switcher — each enrolled Courses-mode course keeps its own
               graph and progress; this only swaps which one is on screen. */}
@@ -718,7 +997,7 @@ export const Courses: React.FC = () => {
       )}
 
       {/* ── Courses List View ─────────────────────────────────────────────── */}
-      {activeView === 'courses' && (
+      {uiMode === 'courses' && activeView === 'courses' && (
         <div className="flex-1 overflow-y-auto p-6">
           <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-5xl mx-auto">
             {/* 1. PRIMARY ROADMAP HERO CARD */}
@@ -776,7 +1055,7 @@ export const Courses: React.FC = () => {
                         <span>Browse All Roadmaps</span>
                       </button>
                       <button
-                        onClick={() => setShowCourseModal(true)}
+                        onClick={() => openAddCourse('courses')}
                         className="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] transition-colors flex items-center gap-1.5 cursor-pointer"
                       >
                         <Plus size={13} />
@@ -931,7 +1210,7 @@ export const Courses: React.FC = () => {
                       variant="primary"
                       size="sm"
                       icon={<Plus size={13} />}
-                      onClick={() => setShowCourseModal(true)}
+                      onClick={() => openAddCourse('courses')}
                     >
                       + Add Course
                     </Button>
@@ -1042,7 +1321,7 @@ export const Courses: React.FC = () => {
                       {activeTemplate ? `The ${activeTemplate.name} Roadmap is your main path above.` : 'Select a roadmap above or add custom courses below.'}
                     </p>
                     <button
-                      onClick={() => setShowCourseModal(true)}
+                      onClick={() => openAddCourse('courses')}
                       className="px-4 py-2 text-xs rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] transition-colors cursor-pointer font-medium"
                     >
                       + Add a course
@@ -1056,25 +1335,67 @@ export const Courses: React.FC = () => {
       )}
 
       {/* ── Modal: Add Course ─────────────────────────────────────────────── */}
-      <Modal open={showCourseModal} onClose={() => setShowCourseModal(false)} title="Add Course">
+      <Modal
+        open={showCourseModal}
+        onClose={() => setShowCourseModal(false)}
+        title={courseForm.mode === 'academic' ? 'Add Academic Course' : 'Add Course'}
+      >
         <form onSubmit={handleAddCourse} className="space-y-4">
+          {/* Mode Selector */}
+          <div>
+            <label className="block text-xs text-txt-muted mb-1.5 font-medium">Course Mode</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setCourseForm(f => ({ ...f, mode: 'academic' }))}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
+                  courseForm.mode === 'academic'
+                    ? 'bg-accent-amber/15 border-accent-amber/50 text-white shadow-sm'
+                    : 'bg-[#0D1017] border-white/[0.08] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
+                }`}
+              >
+                <GraduationCap size={16} className={courseForm.mode === 'academic' ? 'text-accent-amber mt-0.5' : 'text-zinc-500 mt-0.5'} />
+                <div className="min-w-0">
+                  <div className={`text-xs font-semibold ${courseForm.mode === 'academic' ? 'text-accent-amber' : 'text-zinc-300'}`}>Academic Mode</div>
+                  <div className="text-[10px] text-zinc-500 mt-0.5 leading-snug">College term course with timetable, deadlines & GPA</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCourseForm(f => ({ ...f, mode: 'courses' }))}
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
+                  courseForm.mode === 'courses'
+                    ? 'bg-accent-amber/15 border-accent-amber/50 text-white shadow-sm'
+                    : 'bg-[#0D1017] border-white/[0.08] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
+                }`}
+              >
+                <Route size={16} className={courseForm.mode === 'courses' ? 'text-accent-amber mt-0.5' : 'text-zinc-500 mt-0.5'} />
+                <div className="min-w-0">
+                  <div className={`text-xs font-semibold ${courseForm.mode === 'courses' ? 'text-accent-amber' : 'text-zinc-300'}`}>Courses Mode</div>
+                  <div className="text-[10px] text-zinc-500 mt-0.5 leading-snug">Sequential self-paced curriculum or roadmap</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs text-txt-muted mb-1 font-medium">Course Title *</label>
             <input
               className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
               value={courseForm.title}
               onChange={e => setCourseForm(f => ({ ...f, title: e.target.value }))}
-              placeholder="e.g. Modern React & TypeScript Bootcamp"
+              placeholder={courseForm.mode === 'academic' ? 'e.g. Linear Algebra (MATH 201)' : 'e.g. Modern React & TypeScript Bootcamp'}
               required
             />
           </div>
           <div>
-            <label className="block text-xs text-txt-muted mb-1 font-medium">Source URL (optional)</label>
+            <label className="block text-xs text-txt-muted mb-1 font-medium">Source / Syllabus URL (optional)</label>
             <input
               className="w-full bg-[#0D1017] border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
               value={courseForm.source_url}
               onChange={e => setCourseForm(f => ({ ...f, source_url: e.target.value }))}
-              placeholder="https://coursera.org/... or https://youtube.com/..."
+              placeholder="https://..."
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -1103,7 +1424,9 @@ export const Courses: React.FC = () => {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" size="sm" type="button" onClick={() => setShowCourseModal(false)}>Cancel</Button>
-            <Button variant="primary" size="sm" type="submit" loading={saving}>Add Course</Button>
+            <Button variant="primary" size="sm" type="submit" loading={saving}>
+              {courseForm.mode === 'academic' ? 'Add Academic Course' : 'Add Course'}
+            </Button>
           </div>
         </form>
       </Modal>
