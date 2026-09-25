@@ -263,3 +263,31 @@ checkout's `node_modules` has Windows-only native bindings (see the
 real-world rate limits, CORS headers) — please smoke-test Run for each of
 the five languages once this is pulled in, since a rate-limited response
 can surface in the browser console as a CORS error rather than a 429.
+
+**Fixed after first deploy (2026-09-25)**: on Vercel, code blocks rendered
+correctly highlighted but with the whole control bar (language picker, Run
+button, Input toggle) missing — only `<pre><code>` showed. Root cause:
+`RunnableCodeBlockView.tsx` had `<NodeViewContent<'code'> as="code" />`, an
+explicit generic type argument on a JSX element. `tsc` (pinned to a very
+recent `~6.0.2`) accepts this syntax, and it built fine locally, but this
+project's Vite build uses Rolldown (Rust-based, not the same tool used to
+smoke-test this locally), whose TS/JSX stripper doesn't reliably support
+generic instantiation directly on a JSX tag — a known rough edge across
+several Rust-based JS/TS tools. The likely failure mode is a silent
+mis-parse of that one element that drops its surrounding markup rather
+than erroring the build, which matches exactly what shipped: highlighted
+code (driven by a ProseMirror decoration plugin, unrelated to this node
+view's own JSX) with no controls around it.
+
+Fix: replaced the generic-on-JSX syntax with a one-time type assertion
+(`NodeViewContent as (props: {...}) => ReactElement`), which needs no
+generic-on-JSX support from any bundler. Re-verified with the same
+Playwright suite as the original feature — all pass, no regressions.
+
+Caveat: this sandbox has no route to install or run Rolldown/oxc directly,
+so this diagnosis is inference from the symptom plus how that syntax is
+known to behave across similar tools, not a reproduction against the exact
+parser Vercel used. If the control bar is still missing after this fix,
+check the Vercel build log for any warning mentioning
+`RunnableCodeBlockView.tsx`, and check the browser console for a runtime
+error on that file — either would point at something else entirely.

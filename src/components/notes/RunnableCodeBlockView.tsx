@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
+import type { KeyboardEvent, ReactElement } from 'react';
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react';
 import type { NodeViewProps } from '@tiptap/react';
 import { Play, LoaderCircle, Keyboard, X } from 'lucide-react';
@@ -17,6 +17,16 @@ type RunState =
   | { phase: 'running' }
   | { phase: 'done'; result: RunResult }
   | { phase: 'error'; message: string };
+
+// NodeViewContent's `as` prop is typed with NoInfer<T>, which blocks inferring
+// the element type from `as="code"` directly — the "correct" fix is an explicit
+// generic on the JSX tag (`<NodeViewContent<'code'>>`), but that syntax isn't
+// reliably handled by every TS/JSX stripper (notably Rolldown's, which this
+// project's Vite build uses), and a silent mis-parse there drops this
+// component's surrounding markup rather than erroring the build. A plain type
+// assertion sidesteps the generic entirely and needs nothing beyond standard
+// TS syntax to compile correctly everywhere.
+const CodeContent = NodeViewContent as (props: { as: 'code'; spellCheck?: boolean }) => ReactElement;
 
 const formatTime = (s: number) => (s < 1 ? `${Math.round(s * 1000)} ms` : `${s.toFixed(2)} s`);
 const formatMemory = (kb: number) => `${(kb / 1024).toFixed(1)} MB`;
@@ -150,7 +160,7 @@ export function RunnableCodeBlockView({ node, updateAttributes, editor }: NodeVi
 
       {/* ── The code itself (editable, highlighted by lowlight) ─────── */}
       <pre spellCheck={false}>
-        <NodeViewContent<'code'> as="code" />
+        <CodeContent as="code" />
       </pre>
 
       {/* ── stdin ────────────────────────────────────────────────────── */}
