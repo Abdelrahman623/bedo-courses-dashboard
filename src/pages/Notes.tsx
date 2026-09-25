@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import { RunnableCodeBlock } from '../components/notes/runnableCodeBlock';
 import { useNotesStore } from '../store/notesStore';
 import { useRoadmapStore } from '../store/roadmapStore';
 import { useProjectsStore } from '../store/projectsStore';
@@ -140,7 +141,9 @@ const Notes: React.FC = () => {
   // ── Editor ──────────────────────────────────────────────────────────────
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      // StarterKit's plain code block is swapped for the runnable one below.
+      StarterKit.configure({ codeBlock: false }),
+      RunnableCodeBlock,
       Placeholder.configure({ placeholder: 'Start writing...' }),
       Highlight,
       TaskList,

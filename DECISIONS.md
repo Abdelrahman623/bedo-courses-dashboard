@@ -205,3 +205,61 @@ store, slice, or duplicated CRUD path was introduced for Academic mode —
 `addCourse`, `deleteCourse`, `updateTopicStatus` etc. are unchanged and used
 by both modes. No further store-boundary work identified for Tier 2 beyond
 what Tier 0 already did.
+
+## Runnable code blocks in Notes
+
+**Task**: when typing a note, confirm a language (Python, R, Java, C++, Go)
+for a code block and run it in-place, output shown in the note.
+
+**Execution backend**: the public Piston API (emkc.org) went whitelist-only
+on 2026-02-15 and can no longer be called from a browser app, so this uses
+Judge0 CE's free public instance (`ce.judge0.com`) instead — no API key
+needed. Self-hostable: set `VITE_CODE_RUNNER_URL` (and `VITE_CODE_RUNNER_TOKEN`
+if that instance requires one) to point at your own Judge0 if the public one
+is ever rate-limited, unavailable, or you don't want note code leaving the
+machine. Language IDs are read from that instance's `/languages` endpoint at
+runtime and matched by name (newest version wins) rather than hardcoded,
+since Judge0 renumbers them between deployments; the classic v1.13 ids
+(Python 71, R 80, Java 62, C++ 54, Go 60) are the fallback if that call
+fails.
+
+**How it's wired in**: `CodeBlockLowlight` (already an installed-but-unused
+dependency) replaces StarterKit's plain `codeBlock` extension — same node
+name, so notes saved before this change load unchanged. A React node view
+(`RunnableCodeBlockView`) adds the language `<select>`, a Run button,
+optional stdin, and an output panel below the code. The language is stored
+on the node's `language` attribute and therefore persists with the note;
+run output is not persisted and clears on reload or on switching languages.
+Until a language is chosen the block highlights via lowlight but Run stays
+disabled, so nothing is ever run as the wrong language by accident.
+
+**Java specifics**: Judge0 requires the entry file to declare `class Main`.
+A public class with any other name is renamed to `Main` before sending
+(identifier occurrences only — never inside string/text-block literals or
+comments, via a literal-splitting regex), and the output panel notes when
+this happened. A block with no `main()` is sent unchanged.
+
+**Shortcuts**: Ctrl/Cmd+Enter runs the focused block instead of the
+editor's default "exit code block" behavior — the block's keyboard handler
+intercepts `Mod-Enter` and dispatches a custom event to the node view's DOM
+element, since a keydown inside a node view's content still targets the
+editor's ProseMirror root, not the node view itself. Tab inserts a 4-space
+indent instead of moving focus out of the block.
+
+**Verified**: `tsc -b --noEmit` clean. 18 unit tests against a mocked
+Judge0 (language-id resolution and caching, Java renaming edge cases,
+unicode round-trip through Judge0's base64 encoding, every result kind,
+429/403/network/timeout error paths, `/languages` failing gracefully to
+the hardcoded ids). Also drove the real Notes page end-to-end in headless
+Chromium (toolbar insert, language picker, Run, stdin, autosave into note
+content, phone-width layout with a long line and long output — no
+horizontal page overflow) against a mocked Judge0 server, since this
+sandbox has no network egress and the real `ce.judge0.com` could not be
+reached from here. `npm run build` / `npm run lint` were not run — this
+checkout's `node_modules` has Windows-only native bindings (see the
+`rolldown` note elsewhere in this file), same limitation as prior tasks.
+
+**Not verified**: behavior of the actual public `ce.judge0.com` (uptime,
+real-world rate limits, CORS headers) — please smoke-test Run for each of
+the five languages once this is pulled in, since a rate-limited response
+can surface in the browser console as a CORS error rather than a 429.

@@ -195,6 +195,54 @@ body {
   margin: 0.8em 0;
 }
 
+/* ── Runnable code block (Notes) ─────────────────────────────────────────────
+   The wrapper owns the border/radius so the control bar, code and output read
+   as one card; the <pre> inside just supplies scrolling and padding. */
+.tiptap-editor .code-runner {
+  margin: 0.8em 0;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.tiptap-editor .code-runner pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.75rem 1rem;
+}
+.tiptap-editor .code-runner pre code {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--txt-primary);
+  tab-size: 4;
+}
+
+/* Syntax colours (lowlight/highlight.js class names) — theme-aware. */
+.tiptap-editor .hljs-comment,
+.tiptap-editor .hljs-quote { color: var(--txt-secondary); opacity: 0.8; font-style: italic; }
+.tiptap-editor .hljs-keyword,
+.tiptap-editor .hljs-selector-tag,
+.tiptap-editor .hljs-literal { color: rgb(var(--c-secondary)); }
+.tiptap-editor .hljs-string,
+.tiptap-editor .hljs-regexp,
+.tiptap-editor .hljs-addition { color: rgb(var(--c-tertiary)); }
+.tiptap-editor .hljs-number,
+.tiptap-editor .hljs-symbol,
+.tiptap-editor .hljs-bullet,
+.tiptap-editor .hljs-meta { color: rgb(var(--c-primary)); }
+.tiptap-editor .hljs-title,
+.tiptap-editor .hljs-section { color: rgb(var(--c-highlight)); }
+.tiptap-editor .hljs-built_in,
+.tiptap-editor .hljs-type,
+.tiptap-editor .hljs-attr { color: rgb(var(--c-tertiary-light)); }
+.tiptap-editor .hljs-deletion { color: #FF6B6B; }
+.tiptap-editor .hljs-emphasis { font-style: italic; }
+.tiptap-editor .hljs-strong { font-weight: 700; }
+
 /* ── Kanban drag ─────────────────────────────────────────────────────────── */
 .dragging {
   opacity: 0.5;
