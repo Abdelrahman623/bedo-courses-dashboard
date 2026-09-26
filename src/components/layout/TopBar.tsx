@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Bell, LogOut, Sparkles, Flame, Target, Compass, FileText, CheckCheck, X, Menu, GraduationCap, Route } from 'lucide-react';
+import { InviteNotificationBell } from './InviteNotificationBell';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
 import { useSessionStore } from '../../store/sessionStore';
@@ -281,6 +282,9 @@ export const TopBar: React.FC = () => {
             <span className="hidden sm:inline">Academic</span>
           </button>
         </div>
+
+        {/* Invite Notifications */}
+        <InviteNotificationBell />
 
         {/* Notifications Center */}
         <div className="relative">

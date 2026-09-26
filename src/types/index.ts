@@ -163,6 +163,58 @@ export interface Project {
   completion_pct: number;
   created_at: string;
   updated_at: string;
+  /** Client-only flag — set when the project was shared with this user (not owned). */
+  isShared?: boolean;
+}
+
+// ─── Project Sharing ─────────────────────────────────────────────────────────
+export type InviteStatus = 'pending' | 'accepted' | 'declined';
+
+export interface ProjectInvite {
+  id: string;
+  project_id: string;
+  inviter_id: string;
+  invitee_id: string;
+  status: InviteStatus;
+  created_at: string;
+  updated_at: string;
+  /** Populated by store join queries */
+  inviter_profile?: Pick<Profile, 'id' | 'name' | 'username' | 'avatar_url'>;
+  invitee_profile?: Pick<Profile, 'id' | 'name' | 'username' | 'avatar_url'>;
+  project?: Pick<Project, 'id' | 'title'>;
+}
+
+// ─── Milestones ──────────────────────────────────────────────────────────────
+export interface MilestoneItem {
+  id: string;
+  milestone_id: string;
+  text: string;
+  done: boolean;
+  position: number;
+  created_at: string;
+}
+
+export interface ProjectMilestone {
+  id: string;
+  project_id: string;
+  title: string;
+  definition?: string;
+  position: number;
+  /** Always fully populated on the client after fetch */
+  items: MilestoneItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── Live Presence ────────────────────────────────────────────────────────────
+export interface PresenceCursor {
+  userId: string;
+  name: string;
+  color: string; // hex, deterministic from userId
+  /** SVG-space (D3 canvas) coordinates */
+  x: number;
+  y: number;
+  updatedAt: number; // Date.now()
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────

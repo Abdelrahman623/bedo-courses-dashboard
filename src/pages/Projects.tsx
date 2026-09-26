@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Grid3X3, Columns, Plus, FolderOpen, Trash2, Rocket, ArrowUpRight,
   Pencil, Search, X, StickyNote, GraduationCap, GripVertical, Layers,
+  Users, Flag, Share2, UserPlus, AlertCircle, LogOut,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -13,6 +14,11 @@ import { useProjectsStore } from '../store/projectsStore';
 import { useRoadmapStore } from '../store/roadmapStore';
 import { useNotesStore } from '../store/notesStore';
 import { safeUrl, getStatusColor, formatDate } from '../lib/utils';
+import { InvitePanel } from '../components/project/InvitePanel';
+import { MilestonesPanel } from '../components/project/MilestonesPanel';
+import { InviteModal } from '../components/project/InviteModal';
+import { ProjectRoadmapView } from '../components/project/ProjectRoadmapView';
+import { useAuth } from '../hooks/useAuth';
 import type { Project, ProjectStatus, ProjectType } from '../types';
 
 // Column dot colors come from getStatusColor() at render time so they follow the theme
@@ -117,15 +123,19 @@ interface CardProps {
   onCompletion: (p: Project, pct: number) => void;
   onNotes: (p: Project) => void;
   onTech: (tech: string) => void;
+  onRoadmap?: (p: Project) => void;
+  onInvite?: (p: Project) => void;
+  onLeave?: (p: Project) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
 }
 
 const ProjectCard: React.FC<CardProps> = ({
   project, noteCount, courseTitle, draggable,
-  onOpen, onEdit, onDelete, onStatus, onCompletion, onNotes, onTech,
+  onOpen, onEdit, onDelete, onLeave, onStatus, onCompletion, onNotes, onTech, onRoadmap, onInvite,
   onDragStart, onDragEnd,
 }) => {
+
   const accent = getStatusColor(project.status);
 
   return (
@@ -156,21 +166,44 @@ const ProjectCard: React.FC<CardProps> = ({
               <GripVertical size={13} />
             </span>
           )}
-          <button
-            onClick={() => onEdit(project)}
-            className="p-1 rounded text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-all cursor-pointer sm:opacity-0 sm:group-hover:opacity-100"
-            title="Edit project"
-          >
-            <Pencil size={13} />
-          </button>
-          <button
-            onClick={() => onDelete(project)}
-            className="p-1 rounded text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer sm:opacity-0 sm:group-hover:opacity-100"
-            title="Delete project"
-          >
-            <Trash2 size={13} />
-          </button>
+          {!project.isShared && onInvite && (
+            <button
+              onClick={() => onInvite(project)}
+              className="p-1.5 rounded-lg text-accent-amber hover:bg-accent-amber/15 transition-all cursor-pointer"
+              title="Invite collaborators to this project"
+            >
+              <UserPlus size={13} />
+            </button>
+          )}
+          {!project.isShared && (
+            <button
+              onClick={() => onEdit(project)}
+              className="p-1 rounded text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-all cursor-pointer sm:opacity-0 sm:group-hover:opacity-100"
+              title="Edit project"
+            >
+              <Pencil size={13} />
+            </button>
+          )}
+          {!project.isShared && (
+            <button
+              onClick={() => onDelete(project)}
+              className="p-1 rounded text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer sm:opacity-0 sm:group-hover:opacity-100"
+              title="Delete project"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+          {project.isShared && onLeave && (
+            <button
+              onClick={() => onLeave(project)}
+              className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+              title="Leave / Withdraw from this project"
+            >
+              <LogOut size={13} />
+            </button>
+          )}
         </div>
+
       </div>
 
       {/* Status (editable) + type */}
@@ -191,6 +224,12 @@ const ProjectCard: React.FC<CardProps> = ({
         <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06]">
           {project.type === 'course' ? 'Course Track' : 'Independent'}
         </span>
+        {project.isShared && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+            <Share2 size={10} />
+            Shared
+          </span>
+        )}
         {courseTitle && (
           <span
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-accent-secondary/10 text-accent-secondary border border-accent-secondary/25 max-w-[160px]"
@@ -271,6 +310,37 @@ const ProjectCard: React.FC<CardProps> = ({
           <StickyNote size={11} />
           {noteCount ? `${noteCount} note${noteCount === 1 ? '' : 's'}` : 'Add note'}
         </button>
+        {onRoadmap && (
+          <button
+            onClick={() => onRoadmap(project)}
+            title="Open project milestone roadmap"
+            className="flex items-center gap-1 text-[11px] font-medium text-accent-amber hover:brightness-125 transition-colors cursor-pointer"
+          >
+            <Flag size={11} />
+            Roadmap
+          </button>
+        )}
+        {!project.isShared && onInvite && (
+          <button
+            onClick={() => onInvite(project)}
+            title="Invite someone to this project"
+            className="flex items-center gap-1 text-[11px] font-medium text-emerald-400 hover:brightness-125 transition-colors cursor-pointer"
+          >
+            <UserPlus size={11} />
+            Invite
+          </button>
+        )}
+        {project.isShared && onLeave && (
+          <button
+            onClick={() => onLeave(project)}
+            title="Leave / Withdraw from this project"
+            className="flex items-center gap-1 text-[11px] font-medium text-rose-400 hover:brightness-125 transition-colors cursor-pointer"
+          >
+            <LogOut size={11} />
+            Leave
+          </button>
+        )}
+
         {project.local_path && (
           <span className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 truncate max-w-full" title={project.local_path}>
             <FolderOpen size={11} className="flex-shrink-0" /> {project.local_path.split(/[/\\]/).pop()}
@@ -283,20 +353,31 @@ const ProjectCard: React.FC<CardProps> = ({
 
 // ─── Page ───────────────────────────────────────────────────────────────────
 export const Projects: React.FC = () => {
-  const { projects, view, setView, fetchProjects, addProject, updateProject, deleteProject } = useProjectsStore();
+  const {
+    projects, view, setView, selectedRoadmapProjectId, setSelectedRoadmapProjectId,
+    fetchProjects, addProject, updateProject, deleteProject, leaveProject
+  } = useProjectsStore();
   const { courses, fetchAll } = useRoadmapStore();
   const { notes, fetchNotes, saveNote } = useNotesStore();
+  const { user } = useAuth();
 
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [showModal, setShowModal] = useState(false);
+  const [inviteModalProject, setInviteModalProject] = useState<Project | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState<Project | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState<Project | null>(null);
+  const [leaving, setLeaving] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<'overview' | 'milestones' | 'collaborators'>('overview');
+
+
 
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -315,8 +396,10 @@ export const Projects: React.FC = () => {
   const openCreate = useCallback((preset?: Partial<FormState>) => {
     setEditingId(null);
     setForm({ ...EMPTY_FORM, ...preset });
+    setModalError(null);
     setShowModal(true);
   }, []);
+
 
   // Deep link: Home's "Register New Project" opens the form directly.
   useEffect(() => {
@@ -405,6 +488,7 @@ export const Projects: React.FC = () => {
   const openEdit = (p: Project) => {
     setEditingId(p.id);
     setForm(formFromProject(p));
+    setModalError(null);
     setShowModal(true);
   };
 
@@ -412,6 +496,7 @@ export const Projects: React.FC = () => {
     e.preventDefault();
     if (!form.title.trim()) return;
     setSaving(true);
+    setModalError(null);
 
     // A project linked to a course *is* a course project — the two fields
     // can no longer contradict each other.
@@ -435,14 +520,20 @@ export const Projects: React.FC = () => {
       course_id: linkedCourse,
     };
 
-    if (editingId) await updateProject(editingId, payload);
-    else await addProject(payload);
+    const res = editingId ? await updateProject(editingId, payload) : await addProject(payload);
 
     setSaving(false);
+    if (res?.error) {
+      setModalError(res.error);
+      return;
+    }
+
     setShowModal(false);
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setModalError(null);
   };
+
 
   const handleDelete = async (p: Project) => {
     // The database sets notes.project_id to NULL on delete; the notes store
@@ -455,18 +546,33 @@ export const Projects: React.FC = () => {
     if (detailId === p.id) setDetailId(null);
   };
 
+  const handleLeave = async (p: Project) => {
+    setLeaving(true);
+    await leaveProject(p.id);
+    setLeaving(false);
+    setConfirmLeave(null);
+    if (detailId === p.id) setDetailId(null);
+  };
+
   const cardProps = (p: Project) => ({
     project: p,
     noteCount: notesByProject.get(p.id) ?? 0,
     courseTitle: p.course_id ? courseTitleById.get(p.course_id) : undefined,
-    onOpen: (x: Project) => setDetailId(x.id),
+    onOpen: (x: Project) => { setDetailId(x.id); setDetailTab('overview'); },
     onEdit: openEdit,
     onDelete: (x: Project) => setConfirmDelete(x),
+    onLeave: (x: Project) => setConfirmLeave(x),
     onStatus: handleStatus,
     onCompletion: handleCompletion,
     onNotes: goToNotes,
+    onRoadmap: (x: Project) => {
+      setSelectedRoadmapProjectId(x.id);
+      setView('roadmap');
+    },
+    onInvite: (x: Project) => setInviteModalProject(x),
     onTech: (t: string) => setTechFilter(prev => (prev?.toLowerCase() === t.toLowerCase() ? null : t)),
   });
+
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
@@ -499,6 +605,21 @@ export const Projects: React.FC = () => {
             >
               <Columns size={14} />
             </button>
+            <button
+              onClick={() => {
+                if (projects.length > 0 && !selectedRoadmapProjectId) {
+                  setSelectedRoadmapProjectId(projects[0].id);
+                }
+                setView('roadmap');
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                view === 'roadmap' ? 'bg-accent-amber text-[#0D0F14] shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+              title="Project Milestone Roadmap (Dedicated Panel)"
+            >
+              <Flag size={13} />
+              <span>Roadmap</span>
+            </button>
           </div>
           <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => openCreate()}>
             New Project
@@ -507,7 +628,7 @@ export const Projects: React.FC = () => {
       </div>
 
       {/* Portfolio stats */}
-      {projects.length > 0 && (
+      {view !== 'roadmap' && projects.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { label: 'Projects', value: String(stats.total), hint: `${stats.total - stats.active - stats.done - stats.shipped} in backlog` },
@@ -525,7 +646,7 @@ export const Projects: React.FC = () => {
       )}
 
       {/* Search + filters */}
-      {projects.length > 0 && (
+      {view !== 'roadmap' && projects.length > 0 && (
         <div className="flex flex-col lg:flex-row lg:items-center gap-2.5">
           <div className="relative flex-1 min-w-0">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
@@ -675,128 +796,237 @@ export const Projects: React.FC = () => {
         </div>
       )}
 
+      {/* Roadmap view — dedicated exclusively for project milestones */}
+      {view === 'roadmap' && projects.length > 0 && (
+        <ProjectRoadmapView
+          project={projects.find(p => p.id === selectedRoadmapProjectId) || projects[0]}
+          allProjects={projects}
+          onSelectProject={(p) => setSelectedRoadmapProjectId(p.id)}
+          onBackToBoard={() => setView('grid')}
+          onOpenInvite={(p) => setInviteModalProject(p)}
+        />
+      )}
+
       {/* Detail panel */}
       <SlideOver
         open={Boolean(detail)}
         onClose={() => setDetailId(null)}
         title={detail?.title}
         subtitle={detail ? `${STATUS_LABEL[detail.status]} · ${detail.completion_pct}% complete` : undefined}
-        width="w-full sm:w-[26rem]"
+        width="w-full sm:w-[28rem]"
       >
         {detail && (
-          <div className="space-y-5">
-            {detail.description && (
-              <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-line">{detail.description}</p>
-            )}
+          <div className="space-y-4">
+            {/* Tabs */}
+            <div className="flex bg-[#0D1017] p-1 rounded-xl border border-white/[0.08] gap-1">
+              <button
+                type="button"
+                onClick={() => setDetailTab('overview')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer text-center ${
+                  detailTab === 'overview'
+                    ? 'bg-accent-amber text-[#0D0F14] shadow-sm'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailTab('milestones')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  detailTab === 'milestones'
+                    ? 'bg-accent-amber text-[#0D0F14] shadow-sm'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Flag size={12} />
+                Milestones
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailTab('collaborators')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  detailTab === 'collaborators'
+                    ? 'bg-accent-amber text-[#0D0F14] shadow-sm'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Users size={12} />
+                Collaborators
+              </button>
+            </div>
 
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">Status</p>
-              <div className="grid grid-cols-2 gap-1.5">
-                {KANBAN_COLS.map(c => (
+            {/* Tab: Overview */}
+            {detailTab === 'overview' && (
+              <div className="space-y-5 pt-1">
+                {detail.description && (
+                  <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-line">{detail.description}</p>
+                )}
+
+                {/* Open project milestone roadmap button */}
+                <button
+                  onClick={() => {
+                    setSelectedRoadmapProjectId(detail.id);
+                    setView('roadmap');
+                    setDetailId(null);
+                  }}
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-accent-amber/15 hover:bg-accent-amber/25 border border-accent-amber/35 text-xs font-bold text-accent-amber transition-colors cursor-pointer shadow-sm"
+                >
+                  <span className="flex items-center gap-2"><Flag size={14} /> Open Project Milestone Roadmap</span>
+                  <ArrowUpRight size={13} />
+                </button>
+
+                {/* Direct Invite button in SlideOver */}
+                {!detail.isShared && (
                   <button
-                    key={c.status}
-                    onClick={() => handleStatus(detail, c.status)}
-                    className={`px-2 py-1.5 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
-                      detail.status === c.status
-                        ? 'text-white'
-                        : 'border-white/[0.08] text-zinc-400 hover:text-white hover:border-white/[0.2]'
-                    }`}
-                    style={detail.status === c.status
-                      ? { background: `${getStatusColor(c.status)}20`, borderColor: `${getStatusColor(c.status)}55` }
-                      : undefined}
+                    onClick={() => setInviteModalProject(detail)}
+                    className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-xs font-semibold text-emerald-400 transition-colors cursor-pointer"
                   >
-                    {STATUS_LABEL[c.status]}
+                    <span className="flex items-center gap-2"><UserPlus size={14} /> Invite Collaborators (User ID / Username)</span>
+                    <Plus size={13} />
                   </button>
-                ))}
-              </div>
-            </div>
+                )}
 
-            <div>
-              <div className="flex justify-between text-[11px] mb-1.5">
-                <span className="text-zinc-500 font-medium">Completion</span>
-                <span className="font-mono text-zinc-300">{detail.completion_pct}%</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={5}
-                value={detail.completion_pct}
-                onChange={e => handleCompletion(detail, Number(e.target.value))}
-                className="project-range w-full cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, ${getStatusColor(detail.status)} 0%, ${getStatusColor(detail.status)} ${detail.completion_pct}%, rgba(255,255,255,0.08) ${detail.completion_pct}%, rgba(255,255,255,0.08) 100%)`,
-                }}
-              />
-            </div>
-
-            {detail.tech_stack.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">Stack</p>
-                <div className="flex flex-wrap gap-1">
-                  {detail.tech_stack.map(t => (
-                    <span key={t} className="px-2 py-0.5 bg-white/[0.03] rounded text-[10px] font-mono text-zinc-400 border border-white/[0.06]">
-                      {t}
-                    </span>
-                  ))}
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">Status</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {KANBAN_COLS.map(c => (
+                      <button
+                        key={c.status}
+                        onClick={() => handleStatus(detail, c.status)}
+                        className={`px-2 py-1.5 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
+                          detail.status === c.status
+                            ? 'text-white'
+                            : 'border-white/[0.08] text-zinc-400 hover:text-white hover:border-white/[0.2]'
+                        }`}
+                        style={detail.status === c.status
+                          ? { background: `${getStatusColor(c.status)}20`, borderColor: `${getStatusColor(c.status)}55` }
+                          : undefined}
+                      >
+                        {STATUS_LABEL[c.status]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1.5">
+                    <span className="text-zinc-500 font-medium">Completion</span>
+                    <span className="font-mono text-zinc-300">{detail.completion_pct}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={detail.completion_pct}
+                    onChange={e => handleCompletion(detail, Number(e.target.value))}
+                    className="project-range w-full cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, ${getStatusColor(detail.status)} 0%, ${getStatusColor(detail.status)} ${detail.completion_pct}%, rgba(255,255,255,0.08) ${detail.completion_pct}%, rgba(255,255,255,0.08) 100%)`,
+                    }}
+                  />
+                </div>
+
+                {detail.tech_stack.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">Stack</p>
+                    <div className="flex flex-wrap gap-1">
+                      {detail.tech_stack.map(t => (
+                        <span key={t} className="px-2 py-0.5 bg-white/[0.03] rounded text-[10px] font-mono text-zinc-400 border border-white/[0.06]">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">Linked</p>
+                  <div className="space-y-1.5">
+                    <button
+                      onClick={() => goToNotes(detail)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] text-xs text-zinc-300 transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2"><StickyNote size={12} /> Notes</span>
+                      <span className="font-mono text-zinc-500">{notesByProject.get(detail.id) ?? 0}</span>
+                    </button>
+                    <button
+                      onClick={() => navigate('/courses?view=courses')}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] text-xs text-zinc-300 transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center gap-2"><GraduationCap size={12} /> Course</span>
+                      <span className="text-zinc-500 truncate max-w-[10rem]">
+                        {detail.course_id ? courseTitleById.get(detail.course_id) ?? 'Unknown course' : 'Not linked'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {(detail.github_url || detail.demo_url || detail.local_path) && (
+                  <div className="space-y-1.5">
+                    {detail.github_url && (
+                      <a href={safeUrl(detail.github_url)} target="_blank" rel="noreferrer"
+                         className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors">
+                        Repository <ArrowUpRight size={12} />
+                      </a>
+                    )}
+                    {detail.demo_url && (
+                      <a href={safeUrl(detail.demo_url)} target="_blank" rel="noreferrer"
+                         className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors">
+                        Live demo <ArrowUpRight size={12} />
+                      </a>
+                    )}
+                    {detail.local_path && (
+                      <p className="text-[11px] font-mono text-zinc-500 break-all">{detail.local_path}</p>
+                    )}
+                  </div>
+                )}
+
+                <p className="text-[10px] text-zinc-600">
+                  Created {formatDate(detail.created_at)} · Updated {formatDate(detail.updated_at)}
+                </p>
+
+                {(!detail.isShared && detail.user_id === user?.id) && (
+                  <div className="flex gap-2 pt-1">
+                    <Button variant="secondary" size="sm" icon={<Pencil size={13} />} onClick={() => { setDetailId(null); openEdit(detail); }}>
+                      Edit
+                    </Button>
+                    <Button variant="danger" size="sm" icon={<Trash2 size={13} />} onClick={() => setConfirmDelete(detail)}>
+                      Delete
+                    </Button>
+                  </div>
+                )}
+                {detail.isShared && (
+                  <div className="flex gap-2 pt-1">
+                    <Button variant="danger" size="sm" icon={<LogOut size={13} />} onClick={() => setConfirmLeave(detail)}>
+                      Leave Project
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">Linked</p>
-              <div className="space-y-1.5">
-                <button
-                  onClick={() => goToNotes(detail)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] text-xs text-zinc-300 transition-colors cursor-pointer"
-                >
-                  <span className="flex items-center gap-2"><StickyNote size={12} /> Notes</span>
-                  <span className="font-mono text-zinc-500">{notesByProject.get(detail.id) ?? 0}</span>
-                </button>
-                <button
-                  onClick={() => navigate('/courses?view=courses')}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] text-xs text-zinc-300 transition-colors cursor-pointer"
-                >
-                  <span className="flex items-center gap-2"><GraduationCap size={12} /> Course</span>
-                  <span className="text-zinc-500 truncate max-w-[10rem]">
-                    {detail.course_id ? courseTitleById.get(detail.course_id) ?? 'Unknown course' : 'Not linked'}
-                  </span>
-                </button>
-              </div>
-            </div>
 
-            {(detail.github_url || detail.demo_url || detail.local_path) && (
-              <div className="space-y-1.5">
-                {detail.github_url && (
-                  <a href={safeUrl(detail.github_url)} target="_blank" rel="noreferrer"
-                     className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors">
-                    Repository <ArrowUpRight size={12} />
-                  </a>
-                )}
-                {detail.demo_url && (
-                  <a href={safeUrl(detail.demo_url)} target="_blank" rel="noreferrer"
-                     className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors">
-                    Live demo <ArrowUpRight size={12} />
-                  </a>
-                )}
-                {detail.local_path && (
-                  <p className="text-[11px] font-mono text-zinc-500 break-all">{detail.local_path}</p>
-                )}
+            {/* Tab: Milestones */}
+            {detailTab === 'milestones' && (
+              <div className="pt-1">
+                <MilestonesPanel
+                  projectId={detail.id}
+                  isOwner={!detail.isShared && detail.user_id === user?.id}
+                />
               </div>
             )}
 
-            <p className="text-[10px] text-zinc-600">
-              Created {formatDate(detail.created_at)} · Updated {formatDate(detail.updated_at)}
-            </p>
-
-            <div className="flex gap-2 pt-1">
-              <Button variant="secondary" size="sm" icon={<Pencil size={13} />} onClick={() => { setDetailId(null); openEdit(detail); }}>
-                Edit
-              </Button>
-              <Button variant="danger" size="sm" icon={<Trash2 size={13} />} onClick={() => setConfirmDelete(detail)}>
-                Delete
-              </Button>
-            </div>
+            {/* Tab: Collaborators */}
+            {detailTab === 'collaborators' && (
+              <div className="pt-1">
+                <InvitePanel
+                  projectId={detail.id}
+                  isOwner={!detail.isShared && detail.user_id === user?.id}
+                />
+              </div>
+            )}
           </div>
         )}
       </SlideOver>
@@ -809,7 +1039,14 @@ export const Projects: React.FC = () => {
         width="max-w-lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
+          {modalError && (
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-400 text-xs flex items-center gap-2">
+              <AlertCircle size={15} className="flex-shrink-0" />
+              <span>{modalError}</span>
+            </div>
+          )}
           <Field label="Project Title *">
+
             <input
               className={inputCls}
               value={form.title}
@@ -975,6 +1212,36 @@ export const Projects: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Leave project confirmation */}
+      <Modal open={Boolean(confirmLeave)} onClose={() => setConfirmLeave(null)} title="Leave Project" width="max-w-sm">
+        {confirmLeave && (
+          <div className="space-y-4">
+            <p className="text-sm text-zinc-300">
+              Are you sure you want to withdraw from <span className="font-semibold text-white">{confirmLeave.title}</span>?
+            </p>
+            <p className="text-xs text-zinc-400">
+              You will lose access to this shared project and its roadmap. The owner can invite you again if needed.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setConfirmLeave(null)}>Cancel</Button>
+              <Button variant="danger" size="sm" icon={<LogOut size={13} />} loading={leaving} onClick={() => handleLeave(confirmLeave)}>
+                Leave Project
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+
+      {/* Invite Collaborator Modal */}
+      <InviteModal
+        project={inviteModalProject}
+        isOpen={Boolean(inviteModalProject)}
+        onClose={() => setInviteModalProject(null)}
+        isOwner={Boolean(inviteModalProject && !inviteModalProject.isShared && (inviteModalProject.user_id === user?.id || !inviteModalProject.user_id))}
+      />
+
     </div>
   );
 };

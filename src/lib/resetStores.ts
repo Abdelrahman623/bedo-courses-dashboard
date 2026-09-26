@@ -2,6 +2,9 @@ import { useRoadmapStore } from '../store/roadmapStore';
 import { useSessionStore } from '../store/sessionStore';
 import { useNotesStore } from '../store/notesStore';
 import { useProjectsStore } from '../store/projectsStore';
+import { useInvitesStore } from '../store/invitesStore';
+import { useMilestonesStore } from '../store/milestonesStore';
+import { usePresenceStore } from '../store/presenceStore';
 
 /**
  * Resets every store's IN-MEMORY state back to empty, on top of clearing
@@ -44,4 +47,19 @@ export function resetAllStores(): void {
   useProjectsStore.setState({
     projects: [],
   });
+
+  useInvitesStore.setState({
+    incoming: [],
+    outgoing: {},
+    collaborators: {},
+    unreadCount: 0,
+  });
+
+  useMilestonesStore.setState({
+    milestones: {},
+    loading: false,
+  });
+
+  usePresenceStore.getState().leaveChannel();
 }
+

@@ -987,8 +987,9 @@ export const Courses: React.FC = () => {
           )}
 
           {/* Interactive D3 Graph */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden relative">
             <RoadmapGraph
+              projectId={searchParams.get('project') || activeTemplateId || getActiveCourseId() || 'shared_roadmap'}
               onOpenAddModal={() => setShowTopicModal(true)}
               onOpenTemplateModal={() => setShowTemplateModal(true)}
             />
