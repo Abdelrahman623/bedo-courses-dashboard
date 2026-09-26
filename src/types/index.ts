@@ -148,6 +148,8 @@ export interface Note {
 export type ProjectStatus = 'idea' | 'in_progress' | 'completed' | 'deployed';
 export type ProjectType = 'course' | 'independent';
 
+export type ProjectRole = 'owner' | 'super_admin' | 'admin' | 'partner';
+
 export interface Project {
   id: string;
   user_id: string;
@@ -165,6 +167,8 @@ export interface Project {
   updated_at: string;
   /** Client-only flag — set when the project was shared with this user (not owned). */
   isShared?: boolean;
+  /** The current user's role on this project: 'owner' | 'super_admin' | 'admin' | 'partner' */
+  currentUserRole?: ProjectRole;
 }
 
 // ─── Project Sharing ─────────────────────────────────────────────────────────
@@ -176,6 +180,7 @@ export interface ProjectInvite {
   inviter_id: string;
   invitee_id: string;
   status: InviteStatus;
+  role: ProjectRole;
   created_at: string;
   updated_at: string;
   /** Populated by store join queries */
@@ -183,6 +188,15 @@ export interface ProjectInvite {
   invitee_profile?: Pick<Profile, 'id' | 'name' | 'username' | 'avatar_url'>;
   project?: Pick<Project, 'id' | 'title'>;
 }
+
+export interface ProjectMember {
+  id: string;
+  name: string;
+  username?: string;
+  avatar_url?: string;
+  role: ProjectRole;
+}
+
 
 // ─── Milestones ──────────────────────────────────────────────────────────────
 export interface MilestoneItem {

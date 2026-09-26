@@ -10,7 +10,9 @@ import { useMilestonesStore } from '../../store/milestonesStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { usePresenceStore } from '../../store/presenceStore';
 import { useAuth } from '../../hooks/useAuth';
+import { ROLE_CONFIGS, getProjectRole, canInviteMembers, canManageMilestones, type ProjectRole } from '../../lib/projectRoles';
 import type { Project, ProjectMilestone } from '../../types';
+
 
 
 interface ProjectRoadmapViewProps {
@@ -68,8 +70,14 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
   const [addingItemToMilestoneId, setAddingItemToMilestoneId] = useState<string | null>(null);
   const [newItemText, setNewItemText] = useState('');
 
-  const isOwner = !project.isShared && project.user_id === user?.id;
+  const role: ProjectRole = getProjectRole(project, user?.id);
+  const canInvite = canInviteMembers(role);
+  const canEditMilestones = canManageMilestones(role);
+  const isOwner = role === 'owner';
+  const roleCfg = ROLE_CONFIGS[role];
+
   const projectMilestones: ProjectMilestone[] = milestones[project.id] ?? [];
+
 
   const handleLeaveProject = async () => {
     setLeaving(true);
@@ -229,8 +237,8 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
               )}
             </div>
 
-            {/* Project dropdown switcher */}
-            <div className="flex items-center gap-2 mt-0.5">
+            {/* Project dropdown switcher + Role Badge */}
+            <div className="flex flex-wrap items-center gap-2.5 mt-0.5">
               <select
                 value={project.id}
                 onChange={e => {
@@ -245,6 +253,10 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
                   </option>
                 ))}
               </select>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${roleCfg.badgeClass}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${roleCfg.dotClass}`} />
+                {roleCfg.label}
+              </span>
             </div>
           </div>
         </div>
@@ -273,8 +285,8 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
             </div>
           )}
 
-          {/* PROMINENT INVITE BUTTON (owner only) */}
-          {isOwner && (
+          {/* PROMINENT INVITE BUTTON (Owner & Super Admin) */}
+          {canInvite && (
             <Button
               variant="outline"
               size="sm"
@@ -286,9 +298,8 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
             </Button>
           )}
 
-
-          {/* Add Milestone Button (owner only) */}
-          {isOwner && (
+          {/* Add Milestone Button (Owner, Super Admin, Admin) */}
+          {canEditMilestones && (
             <Button
               variant="primary"
               size="sm"
@@ -312,6 +323,7 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
             </Button>
           )}
         </div>
+
 
       </div>
 
@@ -428,7 +440,7 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
                               Active
                             </span>
                           )}
-                          {isOwner && (
+                          {canEditMilestones && (
                             <button
                               onClick={() => deleteMilestone(m.id, project.id)}
                               className="p-1 rounded text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
@@ -477,7 +489,8 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
                           <h4 className="font-bold text-white text-sm tracking-tight leading-snug">
                             {m.title}
                           </h4>
-                          {isOwner && (
+                          {canEditMilestones && (
+
                             <button
                               onClick={() => {
                                 setEditingMilestoneId(m.id);
@@ -561,7 +574,7 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
                               >
                                 {item.text}
                               </span>
-                              {isOwner && (
+                              {canEditMilestones && (
                                 <button
                                   onClick={() => deleteItem(item.id, m.id, project.id)}
                                   className="opacity-0 group-hover/item:opacity-100 p-0.5 text-zinc-600 hover:text-rose-400 transition-opacity cursor-pointer"
@@ -576,7 +589,8 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
                       )}
 
                       {/* Add Action Item Input */}
-                      {isOwner && (
+                      {canEditMilestones && (
+
                         <div className="pt-2">
                           {addingItemToMilestoneId === m.id ? (
                             <div className="flex items-center gap-1.5">

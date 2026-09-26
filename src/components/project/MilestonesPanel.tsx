@@ -6,8 +6,10 @@ import type { ProjectMilestone } from '../../types';
 
 interface MilestonesPanelProps {
   projectId: string;
-  isOwner: boolean;
+  isOwner?: boolean;
+  canEdit?: boolean;
 }
+
 
 // ── Progress ring ────────────────────────────────────────────────────────────
 const ProgressRing: React.FC<{ done: number; total: number; size?: number }> = ({
@@ -55,9 +57,10 @@ const ProgressRing: React.FC<{ done: number; total: number; size?: number }> = (
 // ── Single milestone card ────────────────────────────────────────────────────
 const MilestoneCard: React.FC<{
   milestone: ProjectMilestone;
-  isOwner: boolean;
+  canModify: boolean;
   projectId: string;
-}> = ({ milestone, isOwner, projectId }) => {
+}> = ({ milestone, canModify, projectId }) => {
+
   const { updateMilestone, deleteMilestone, addItem, toggleItem, deleteItem } = useMilestonesStore();
   const [expanded, setExpanded] = useState(true);
   const [newItemText, setNewItemText] = useState('');
@@ -103,8 +106,8 @@ const MilestoneCard: React.FC<{
             />
           ) : (
             <button
-              onClick={() => isOwner && setEditing(true)}
-              className={`text-sm font-semibold text-white text-left w-full truncate ${isOwner ? 'hover:text-accent-amber cursor-pointer' : 'cursor-default'}`}
+              onClick={() => canModify && setEditing(true)}
+              className={`text-sm font-semibold text-white text-left w-full truncate ${canModify ? 'hover:text-accent-amber cursor-pointer' : 'cursor-default'}`}
             >
               {milestone.title}
             </button>
@@ -122,7 +125,7 @@ const MilestoneCard: React.FC<{
               Save
             </button>
           )}
-          {isOwner && !editing && (
+          {canModify && !editing && (
             <button
               onClick={() => deleteMilestone(milestone.id, projectId)}
               className="p-1 rounded text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
@@ -131,6 +134,7 @@ const MilestoneCard: React.FC<{
               <Trash2 size={13} />
             </button>
           )}
+
           <button
             onClick={() => setExpanded(v => !v)}
             className="p-1 rounded text-zinc-500 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
@@ -184,7 +188,7 @@ const MilestoneCard: React.FC<{
                   <span className={`text-xs flex-1 leading-relaxed transition-colors ${item.done ? 'line-through text-zinc-600' : 'text-zinc-300'}`}>
                     {item.text}
                   </span>
-                  {isOwner && (
+                  {canModify && (
                     <button
                       onClick={() => deleteItem(item.id, milestone.id, projectId)}
                       className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-zinc-600 hover:text-rose-400 transition-all cursor-pointer"
@@ -197,8 +201,9 @@ const MilestoneCard: React.FC<{
             </div>
           )}
 
-          {/* Add item — owner only */}
-          {isOwner && (
+          {/* Add item — editors only */}
+          {canModify && (
+
             <div className="flex items-center gap-2 pt-1">
               <input
                 ref={itemInputRef}
@@ -224,7 +229,8 @@ const MilestoneCard: React.FC<{
 };
 
 // ── Panel ────────────────────────────────────────────────────────────────────
-export const MilestonesPanel: React.FC<MilestonesPanelProps> = ({ projectId, isOwner }) => {
+export const MilestonesPanel: React.FC<MilestonesPanelProps> = ({ projectId, isOwner = false, canEdit }) => {
+  const canModify = canEdit !== undefined ? canEdit : isOwner;
   const { milestones, loading, fetchMilestones, addMilestone } = useMilestonesStore();
   const [showForm, setShowForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -269,7 +275,7 @@ export const MilestonesPanel: React.FC<MilestonesPanelProps> = ({ projectId, isO
             )}
           </span>
         </div>
-        {isOwner && (
+        {canModify && (
           <button
             onClick={() => { setError(null); setShowForm(v => !v); }}
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-white/[0.04] hover:bg-accent-amber/10 text-zinc-400 hover:text-accent-amber border border-white/[0.06] transition-colors cursor-pointer"
@@ -281,7 +287,8 @@ export const MilestonesPanel: React.FC<MilestonesPanelProps> = ({ projectId, isO
       </div>
 
       {/* Add milestone form */}
-      {isOwner && showForm && (
+      {canModify && showForm && (
+
         <form onSubmit={handleAdd} className="space-y-2 p-3 rounded-xl border border-accent-amber/20 bg-accent-amber/[0.03]">
           {error && (
             <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-400 text-xs flex items-center gap-2">
@@ -336,7 +343,7 @@ export const MilestonesPanel: React.FC<MilestonesPanelProps> = ({ projectId, isO
         <div className="text-center py-8">
           <Flag size={24} className="text-zinc-700 mx-auto mb-2" />
           <p className="text-xs text-zinc-500">
-            {isOwner ? 'No milestones yet — add one above to track progress.' : 'No milestones defined yet.'}
+            {canModify ? 'No milestones yet — add one above to track progress.' : 'No milestones defined yet.'}
           </p>
         </div>
       )}
@@ -344,9 +351,10 @@ export const MilestonesPanel: React.FC<MilestonesPanelProps> = ({ projectId, isO
       {/* Milestone cards */}
       <div className="space-y-3">
         {projectMilestones.map(m => (
-          <MilestoneCard key={m.id} milestone={m} isOwner={isOwner} projectId={projectId} />
+          <MilestoneCard key={m.id} milestone={m} canModify={canModify} projectId={projectId} />
         ))}
       </div>
     </div>
   );
 };
+

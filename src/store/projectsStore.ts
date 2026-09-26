@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { getActiveUserId } from '../lib/storage';
-import type { Project } from '../types';
+import type { Project, ProjectRole } from '../types';
 
 interface ProjectsState {
   projects: Project[];
@@ -44,7 +44,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
         // best-effort
       }
 
-      // Fetch owned projects and accepted-invite project IDs in parallel
+      // Fetch owned projects and accepted-invite project IDs with their role in parallel
       const [{ data: ownedData, error: ownedErr }, { data: sharedInvites, error: inviteErr }] =
         await Promise.all([
           supabase
@@ -54,7 +54,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
             .order('created_at', { ascending: false }),
           supabase
             .from('project_invites')
-            .select('project_id')
+            .select('project_id, role')
             .eq('invitee_id', userId)
             .eq('status', 'accepted'),
         ]);
@@ -65,7 +65,18 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
         return;
       }
 
-      const owned: Project[] = (ownedData as Project[]) ?? [];
+      const owned: Project[] = ((ownedData as Project[]) ?? []).map(p => ({
+        ...p,
+        currentUserRole: 'owner',
+      }));
+
+      // Map roles for shared projects
+      const roleByProjectId = new Map<string, ProjectRole>();
+      (sharedInvites ?? []).forEach((r: any) => {
+        if (r.project_id) {
+          roleByProjectId.set(r.project_id, (r.role as ProjectRole) || 'partner');
+        }
+      });
 
       // Fetch the actual shared project rows
       const sharedIds = (sharedInvites ?? []).map((r: { project_id: string }) => r.project_id);
@@ -82,8 +93,13 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
         if (sharedErr) {
           console.warn('[ProjectsStore] Fetch shared projects failed:', sharedErr.message);
         }
-        shared = ((sharedData as Project[]) ?? []).map(p => ({ ...p, isShared: true }));
+        shared = ((sharedData as Project[]) ?? []).map(p => ({
+          ...p,
+          isShared: true,
+          currentUserRole: roleByProjectId.get(p.id) || 'partner',
+        }));
       }
+
 
       // Merge: owned first, then shared (deduplicated)
       const ownedIds = new Set(owned.map(p => p.id));
@@ -115,13 +131,15 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
       user_id: userId,
       created_at: now,
       updated_at: now,
+      currentUserRole: 'owner',
     };
 
     // Clean payload for database insert - strip client-only properties
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { isShared, ...dbProject } = newProject as any;
+    const { isShared, currentUserRole, ...dbProject } = newProject as any;
 
     const { error } = await supabase.from('projects').insert(dbProject);
+
     if (error) {
       console.error('[ProjectsStore] Insert project failed:', error.code, error.message, error.details, error.hint);
       return { error: error.message };

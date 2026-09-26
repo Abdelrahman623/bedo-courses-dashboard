@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  UserPlus, Check, X, Users, Clock, Loader2, Search, Copy, CheckCheck, ShieldCheck, Mail, UserMinus, LogOut
+  UserPlus, Check, X, Users, Clock, Loader2, Search, Copy, CheckCheck, Mail, UserMinus, LogOut, ChevronDown,
 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { useInvitesStore } from '../../store/invitesStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { useAuth } from '../../hooks/useAuth';
-import type { Profile, Project, ProjectInvite } from '../../types';
-
+import { ROLE_CONFIGS, getProjectRole, canInviteMembers, canManageMembers, type ProjectRole } from '../../lib/projectRoles';
+import type { Profile, Project, ProjectInvite, ProjectMember } from '../../types';
 
 interface InviteModalProps {
   project: Project | null;
@@ -16,7 +16,6 @@ interface InviteModalProps {
   onClose: () => void;
   isOwner?: boolean;
 }
-
 
 const Avatar: React.FC<{ profile?: Pick<Profile, 'name' | 'avatar_url'>; size?: number }> = ({
   profile,
@@ -40,6 +39,20 @@ const Avatar: React.FC<{ profile?: Pick<Profile, 'name' | 'avatar_url'>; size?: 
   );
 };
 
+/** Compact role badge */
+const RoleBadge: React.FC<{ role: ProjectRole }> = ({ role }) => {
+  const cfg = ROLE_CONFIGS[role];
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${cfg.badgeClass}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dotClass}`} />
+      {cfg.shortLabel}
+    </span>
+  );
+};
+
+/** Assignable roles (owner is never assigned via invite) */
+const ASSIGNABLE_ROLES: ProjectRole[] = ['super_admin', 'admin', 'partner'];
+
 export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClose, isOwner = false }) => {
   const { user } = useAuth();
   const {
@@ -50,14 +63,21 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
     sendInvite,
     revokeInvite,
     removeCollaborator,
+    updateMemberRole,
     searchProfiles,
   } = useInvitesStore();
+
+  const myRole: ProjectRole = project ? getProjectRole(project, user?.id) : (isOwner ? 'owner' : 'partner');
+  const canInvite = canInviteMembers(myRole);
+  const canManage = canManageMembers(myRole);
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Profile[]>([]);
   const [searching, setSearching] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<ProjectRole>('partner');
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copiedMyId, setCopiedMyId] = useState(false);
@@ -72,11 +92,9 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
     onClose();
   };
 
-
-
   const projectId = project?.id ?? '';
   const projectInvites = useMemo<ProjectInvite[]>(() => outgoing[projectId] ?? [], [outgoing, projectId]);
-  const projectCollaborators = useMemo<Profile[]>(() => collaborators[projectId] ?? [], [collaborators, projectId]);
+  const projectCollaborators = useMemo<ProjectMember[]>(() => collaborators[projectId] ?? [], [collaborators, projectId]);
 
   useEffect(() => {
     if (isOpen && projectId) {
@@ -109,7 +127,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
     setSendingId(targetUserId);
     setStatusMessage(null);
 
-    const { error } = await sendInvite(projectId, targetUserId);
+    const { error } = await sendInvite(projectId, targetUserId, selectedRole);
     setSendingId(null);
 
     if (error) {
@@ -117,13 +135,13 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
     } else {
       setStatusMessage({
         type: 'success',
-        text: `Invitation sent to ${targetName || 'user'}! They can accept it in their topbar bell.`,
+        text: `Invitation sent to ${targetName || 'user'} as ${ROLE_CONFIGS[selectedRole].label}!`,
       });
       setQuery('');
       setResults([]);
       fetchOutgoing(projectId);
     }
-  }, [projectId, sendInvite, fetchOutgoing]);
+  }, [projectId, sendInvite, fetchOutgoing, selectedRole]);
 
   const handleRevoke = useCallback(async (inviteId: string) => {
     if (!projectId) return;
@@ -145,6 +163,16 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
     }
   }, [projectId, removeCollaborator]);
 
+  const handleUpdateRole = useCallback(async (collaboratorId: string, newRole: ProjectRole) => {
+    if (!projectId) return;
+    setUpdatingRoleId(collaboratorId);
+    const { error } = await updateMemberRole(projectId, collaboratorId, newRole);
+    setUpdatingRoleId(null);
+    if (error) {
+      setStatusMessage({ type: 'error', text: `Failed to update role: ${error}` });
+    }
+  }, [projectId, updateMemberRole]);
+
   const copyMyId = () => {
     if (!user?.id) return;
     navigator.clipboard.writeText(user.id);
@@ -154,19 +182,18 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
 
   const isExactUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query.trim());
 
-
   if (!project) return null;
 
   return (
     <Modal
       open={isOpen}
       onClose={onClose}
-      title={isOwner ? `Share Project: ${project.title}` : `Project: ${project.title}`}
+      title={canInvite ? `Share Project: ${project.title}` : `Project: ${project.title}`}
       width="max-w-lg"
     >
       <div className="space-y-5">
 
-        {/* Status feedback (shown for both owner + non-owner) */}
+        {/* Status feedback */}
         {statusMessage && (
           <div
             className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
@@ -180,8 +207,8 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
           </div>
         )}
 
-        {/* ── OWNER ONLY: invite form ── */}
-        {isOwner && (
+        {/* ── INVITE FORM (owner + super_admin) ── */}
+        {canInvite && (
           <>
             {/* Helper Banner */}
             <div className="p-3 bg-white/[0.03] border border-white/[0.08] rounded-xl flex items-start gap-2.5">
@@ -191,12 +218,12 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
                   Invite someone to collaborate by searching their <span className="text-white font-semibold">User ID</span> or <span className="text-white font-semibold">Username</span>.
                 </p>
                 <p className="text-[11px] text-zinc-500 mt-1">
-                  They will receive a notification in their bell icon with <span className="text-emerald-400 font-medium">Accept</span> and <span className="text-rose-400 font-medium">Decline</span> options.
+                  They will receive a notification with <span className="text-emerald-400 font-medium">Accept</span> and <span className="text-rose-400 font-medium">Decline</span> options.
                 </p>
               </div>
             </div>
 
-            {/* User's Own ID Card for Reference */}
+            {/* User's Own ID Card */}
             {user?.id && (
               <div className="flex items-center justify-between p-2.5 bg-[#0D1017] border border-white/[0.06] rounded-xl">
                 <div className="min-w-0 pr-2">
@@ -218,6 +245,34 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
               </div>
             )}
 
+            {/* Role selector for new invite */}
+            <div>
+              <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                Assign Role
+              </label>
+              <div className="flex gap-2">
+                {ASSIGNABLE_ROLES.map(r => {
+                  const cfg = ROLE_CONFIGS[r];
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setSelectedRole(r)}
+                      className={`flex-1 py-2 px-2 rounded-xl border text-[11px] font-semibold transition-all cursor-pointer ${
+                        selectedRole === r
+                          ? `${cfg.badgeClass} shadow-sm`
+                          : 'border-white/[0.08] text-zinc-500 hover:text-zinc-300 hover:border-white/[0.16]'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full inline-block mr-1 ${selectedRole === r ? cfg.dotClass : 'bg-zinc-600'}`} />
+                      {cfg.shortLabel}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-zinc-500 mt-1.5">{ROLE_CONFIGS[selectedRole].description}</p>
+            </div>
+
             {/* Search / Invite Input */}
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
@@ -237,7 +292,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
                 )}
               </div>
 
-              {/* Direct UUID invite action if user pasted a UUID */}
+              {/* Direct UUID invite */}
               {isExactUuid && results.length === 0 && !searching && (
                 <div className="mt-2 p-2.5 rounded-xl border border-accent-amber/30 bg-accent-amber/[0.05] flex items-center justify-between">
                   <div className="min-w-0 pr-2">
@@ -251,12 +306,12 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
                     loading={sendingId === query.trim()}
                     onClick={() => handleSendInvite(query.trim())}
                   >
-                    Send Direct Invite
+                    Send Invite
                   </Button>
                 </div>
               )}
 
-              {/* Search Results Dropdown */}
+              {/* Search Results */}
               {results.length > 0 && (
                 <div className="mt-2 rounded-xl border border-white/[0.10] bg-[#0D1017] divide-y divide-white/[0.06] overflow-hidden max-h-56 overflow-y-auto shadow-xl">
                   {results.map(p => (
@@ -290,8 +345,8 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
           </>
         )}
 
-        {/* ── Collaborators & Invites section (always visible) ── */}
-        <div className={`${isOwner ? 'pt-2 border-t border-white/[0.08]' : ''} space-y-4`}>
+        {/* ── Collaborators & Invites section ── */}
+        <div className={`${canInvite ? 'pt-2 border-t border-white/[0.08]' : ''} space-y-4`}>
 
           {/* Active Collaborators */}
           <div>
@@ -305,57 +360,94 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
               <p className="text-xs text-zinc-600 italic py-1">No collaborators joined yet.</p>
             ) : (
               <div className="space-y-1.5">
-                {projectCollaborators.map(c => (
-                  <div
-                    key={c.id}
-                    className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06]"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Avatar profile={c} size={26} />
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-white truncate">{c.name}</p>
-                        {c.username && (
-                          <p className="text-[10px] text-zinc-500 truncate">@{c.username}</p>
+                {projectCollaborators.map(c => {
+                  const isMe = c.id === user?.id;
+                  const isThisOwner = c.role === 'owner';
+                  const canChangeThisRole = canManage && !isThisOwner && !isMe;
+                  const canRemoveThis = canManage && !isThisOwner && !isMe;
+
+                  return (
+                    <div
+                      key={c.id}
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06]"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <Avatar profile={c} size={26} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-xs font-medium text-white truncate">{c.name}</p>
+                            <RoleBadge role={c.role} />
+                            {isMe && (
+                              <span className="text-[10px] text-zinc-500">(you)</span>
+                            )}
+                          </div>
+                          {c.username && (
+                            <p className="text-[10px] text-zinc-500 truncate">@{c.username}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                        {/* Role changer dropdown */}
+                        {canChangeThisRole && (
+                          <div className="relative">
+                            {updatingRoleId === c.id ? (
+                              <Loader2 size={13} className="animate-spin text-zinc-400" />
+                            ) : (
+                              <div className="relative">
+                                <select
+                                  value={c.role}
+                                  onChange={e => handleUpdateRole(c.id, e.target.value as ProjectRole)}
+                                  className="appearance-none bg-white/[0.04] border border-white/[0.10] hover:border-white/[0.20] rounded-lg pl-2 pr-6 py-1 text-[11px] text-zinc-300 outline-none cursor-pointer transition-colors"
+                                  title="Change role"
+                                >
+                                  {ASSIGNABLE_ROLES.map(r => (
+                                    <option key={r} value={r}>{ROLE_CONFIGS[r].label}</option>
+                                  ))}
+                                </select>
+                                <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Remove button */}
+                        {canRemoveThis && (
+                          <button
+                            onClick={() => handleRemove(c.id)}
+                            disabled={removingId === c.id}
+                            title="Remove this collaborator's access"
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 hover:border-rose-500/40 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {removingId === c.id
+                              ? <Loader2 size={11} className="animate-spin" />
+                              : <UserMinus size={11} />}
+                            Remove
+                          </button>
+                        )}
+
+                        {/* Leave button for self (non-owner) */}
+                        {isMe && !isThisOwner && (
+                          <button
+                            onClick={handleLeaveProject}
+                            disabled={leaving}
+                            title="Withdraw / Leave this project"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 hover:border-rose-500/40 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {leaving ? <Loader2 size={11} className="animate-spin" /> : <LogOut size={11} />}
+                            Leave
+                          </button>
                         )}
                       </div>
                     </div>
-                    {isOwner ? (
-                      <button
-                        onClick={() => handleRemove(c.id)}
-                        disabled={removingId === c.id}
-                        title="Remove this collaborator's access"
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 hover:border-rose-500/40 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        {removingId === c.id
-                          ? <Loader2 size={11} className="animate-spin" />
-                          : <UserMinus size={11} />}
-                        Remove Access
-                      </button>
-                    ) : c.id === user?.id ? (
-                      <button
-                        onClick={handleLeaveProject}
-                        disabled={leaving}
-                        title="Withdraw / Leave this project"
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 hover:border-rose-500/40 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        {leaving ? <Loader2 size={11} className="animate-spin" /> : <LogOut size={11} />}
-                        Leave Project
-                      </button>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-400/10 text-emerald-400 border border-emerald-400/25">
-                        <ShieldCheck size={11} />
-                        Active Member
-                      </span>
-                    )}
-
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
 
-          {/* Pending / Sent Invites — OWNER ONLY */}
-          {isOwner && (
+          {/* Pending / Sent Invites — invite-capable roles only */}
+          {canInvite && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
@@ -372,21 +464,24 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
                       key={invite.id}
                       className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06]"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <Avatar profile={invite.invitee_profile} size={24} />
                         <div className="min-w-0">
                           <p className="text-xs font-medium text-zinc-300 truncate">
                             {invite.invitee_profile?.name || `User (${invite.invitee_id.slice(0, 8)}...)`}
                           </p>
-                          <p className="text-[10px] text-zinc-500 font-mono">
-                            Status: <span className={invite.status === 'accepted' ? 'text-emerald-400 font-semibold' : invite.status === 'declined' ? 'text-rose-400' : 'text-amber-400'}>{invite.status}</span>
-                          </p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <p className="text-[10px] text-zinc-500 font-mono">
+                              <span className={invite.status === 'accepted' ? 'text-emerald-400 font-semibold' : invite.status === 'declined' ? 'text-rose-400' : 'text-amber-400'}>{invite.status}</span>
+                            </p>
+                            {invite.role && <RoleBadge role={invite.role} />}
+                          </div>
                         </div>
                       </div>
                       {invite.status === 'pending' && (
                         <button
                           onClick={() => handleRevoke(invite.id)}
-                          className="px-2 py-1 rounded text-[11px] font-medium text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          className="px-2 py-1 rounded text-[11px] font-medium text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer ml-2"
                           title="Cancel this invite"
                         >
                           Cancel
@@ -409,4 +504,3 @@ export const InviteModal: React.FC<InviteModalProps> = ({ project, isOpen, onClo
     </Modal>
   );
 };
-

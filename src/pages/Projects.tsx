@@ -19,6 +19,7 @@ import { MilestonesPanel } from '../components/project/MilestonesPanel';
 import { InviteModal } from '../components/project/InviteModal';
 import { ProjectRoadmapView } from '../components/project/ProjectRoadmapView';
 import { useAuth } from '../hooks/useAuth';
+import { ROLE_CONFIGS, getProjectRole, canInviteMembers, canManageMilestones } from '../lib/projectRoles';
 import type { Project, ProjectStatus, ProjectType } from '../types';
 
 // Column dot colors come from getStatusColor() at render time so they follow the theme
@@ -166,7 +167,7 @@ const ProjectCard: React.FC<CardProps> = ({
               <GripVertical size={13} />
             </span>
           )}
-          {!project.isShared && onInvite && (
+          {onInvite && canInviteMembers(project.currentUserRole ?? (project.isShared ? 'partner' : 'owner')) && (
             <button
               onClick={() => onInvite(project)}
               className="p-1.5 rounded-lg text-accent-amber hover:bg-accent-amber/15 transition-all cursor-pointer"
@@ -224,7 +225,13 @@ const ProjectCard: React.FC<CardProps> = ({
         <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06]">
           {project.type === 'course' ? 'Course Track' : 'Independent'}
         </span>
-        {project.isShared && (
+        {project.isShared && project.currentUserRole && (
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border ${ROLE_CONFIGS[project.currentUserRole].badgeClass}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${ROLE_CONFIGS[project.currentUserRole].dotClass}`} />
+            {ROLE_CONFIGS[project.currentUserRole].shortLabel}
+          </span>
+        )}
+        {project.isShared && !project.currentUserRole && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
             <Share2 size={10} />
             Shared
@@ -320,7 +327,7 @@ const ProjectCard: React.FC<CardProps> = ({
             Roadmap
           </button>
         )}
-        {!project.isShared && onInvite && (
+        {onInvite && canInviteMembers(project.currentUserRole ?? (project.isShared ? 'partner' : 'owner')) && (
           <button
             onClick={() => onInvite(project)}
             title="Invite someone to this project"
@@ -1014,6 +1021,7 @@ export const Projects: React.FC = () => {
                 <MilestonesPanel
                   projectId={detail.id}
                   isOwner={!detail.isShared && detail.user_id === user?.id}
+                  canEdit={canManageMilestones(getProjectRole(detail, user?.id))}
                 />
               </div>
             )}
@@ -1023,6 +1031,7 @@ export const Projects: React.FC = () => {
               <div className="pt-1">
                 <InvitePanel
                   projectId={detail.id}
+                  currentUserRole={getProjectRole(detail, user?.id)}
                   isOwner={!detail.isShared && detail.user_id === user?.id}
                 />
               </div>
@@ -1239,7 +1248,7 @@ export const Projects: React.FC = () => {
         project={inviteModalProject}
         isOpen={Boolean(inviteModalProject)}
         onClose={() => setInviteModalProject(null)}
-        isOwner={Boolean(inviteModalProject && !inviteModalProject.isShared && (inviteModalProject.user_id === user?.id || !inviteModalProject.user_id))}
+        isOwner={Boolean(inviteModalProject && canInviteMembers(getProjectRole(inviteModalProject, user?.id)))}
       />
 
     </div>
