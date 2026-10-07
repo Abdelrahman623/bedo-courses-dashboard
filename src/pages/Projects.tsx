@@ -277,6 +277,7 @@ const ProjectCard: React.FC<CardProps> = ({
           step={5}
           value={project.completion_pct}
           onChange={(e) => onCompletion(project, Number(e.target.value))}
+          onTouchStart={(e) => e.stopPropagation()}
           title="Drag to update completion"
           className="project-range w-full cursor-pointer"
           style={{

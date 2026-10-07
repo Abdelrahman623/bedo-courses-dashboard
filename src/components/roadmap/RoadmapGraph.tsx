@@ -125,6 +125,16 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
       .call(zoomRef.current.scaleBy, delta);
   };
 
+
+  // Stable key that changes ONLY when nodes are added or removed (not when their
+  // status changes).  This is the gate that decides whether to rebuild the whole
+  // SVG or just repaint the existing elements.
+  const nodeIdsKey = localNodes.map(n => n.id).join(',');
+
+  // ── Effect 1: full SVG rebuild ────────────────────────────────────────────
+  // Runs when the set of nodes changes, edges change, dimensions change, or the
+  // layout mode changes.  Status changes do NOT trigger this effect, so the
+  // zoom/pan transform is preserved when the user clicks a status button.
   useEffect(() => {
     if (!svgRef.current || localNodes.length === 0) return;
     const { width, height } = dimensions;
@@ -282,6 +292,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         .enter()
         .append('g')
         .attr('class', 'topic-card')
+        .attr('data-node-id', d => d.id)
         .attr('transform', d => `translate(${d.x}, ${d.y})`)
         .style('cursor', 'pointer')
         .on('click', (_, d) => {
@@ -291,22 +302,33 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
 
       // Card Background
       nodeCard.append('rect')
+        // 'node-bg' must stay as the first token — Effect 2 targets it with
+        // g.select('.node-bg'). A second .attr('class',…) call would overwrite it.
+        .attr('class', 'node-bg transition-all')
         .attr('width', CARD_WIDTH)
         .attr('height', CARD_HEIGHT)
         .attr('rx', 12)
         .attr('fill', d => getStatusBgColor(d.status))
         .attr('stroke', d => getStatusBorderColor(d.status))
         .attr('stroke-width', d => d.status === 'in_progress' ? 1.8 : 1)
-        .attr('class', 'transition-all')
         .on('mouseenter', function() {
           d3.select(this).attr('stroke', getAccentColor()).attr('stroke-width', 2);
         })
-        .on('mouseleave', function(_, d) {
-          d3.select(this).attr('stroke', getStatusBorderColor(d.status)).attr('stroke-width', d.status === 'in_progress' ? 1.8 : 1);
+        .on('mouseleave', function() {
+          // Re-read the current status from the store (via the parent group's
+          // data-node-id) rather than the stale snapshot in `d` — otherwise
+          // mousing off reverts to the original status color even after a change.
+          const nodeId = (this.parentNode as SVGGElement)?.getAttribute('data-node-id');
+          const current = localNodes.find(n => n.id === nodeId);
+          if (!current) return;
+          d3.select(this)
+            .attr('stroke', getStatusBorderColor(current.status))
+            .attr('stroke-width', current.status === 'in_progress' ? 1.8 : 1);
         });
 
       // Status Indicator Dot (Left side)
       nodeCard.append('circle')
+        .attr('class', 'node-status-dot')
         .attr('cx', 16)
         .attr('cy', CARD_HEIGHT / 2)
         .attr('r', 4.5)
@@ -332,6 +354,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
       // Status pill / icon on right
       nodeCard.filter(d => d.status === 'completed')
         .append('text')
+        .attr('class', 'node-check')
         .attr('x', CARD_WIDTH - 14)
         .attr('y', CARD_HEIGHT / 2 + 4)
         .attr('text-anchor', 'end')
@@ -348,17 +371,16 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         if (n.y + CARD_HEIGHT > maxY) maxY = n.y + CARD_HEIGHT;
       });
 
-      const totalW = Math.max(maxX - minX + 120, 300);
-      const totalH = Math.max(maxY - minY + 120, 300);
+      // Extra padding so the outermost cards never touch the viewport edge.
+      // 220px on the content bounds + 120px viewport margin gives the map
+      // a comfortable breathing room on first load.
+      const totalW = Math.max(maxX - minX + 220, 300);
+      const totalH = Math.max(maxY - minY + 220, 300);
       const midX = (minX + maxX) / 2;
       const midY = (minY + maxY) / 2;
 
-      const scale = Math.min(Math.min((width - 60) / totalW, (height - 60) / totalH), 1.0);
-      // Floor matches the zoom behavior's own scaleExtent (0.15) rather than
-      // an arbitrary 0.35 — that fixed floor was overriding the real fit
-      // scale on narrow phone screens with many phase columns, forcing the
-      // view to stay zoomed in past what the screen could show and pushing
-      // the outer columns off both edges instead of actually fitting.
+      // Cap at 0.88 so the initial fit never feels uncomfortably zoomed-in.
+      const scale = Math.min(Math.min((width - 120) / totalW, (height - 120) / totalH), 0.88);
       const clampedScale = Math.max(scale, 0.15);
 
       boundsRef.current = { midX, midY, scale: clampedScale };
@@ -437,16 +459,14 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         if (ny + r > maxY) maxY = ny + r;
       });
 
-      const padding = 80;
+      const padding = 130;
       const graphWidth = Math.max(maxX - minX + padding * 2, 200);
       const graphHeight = Math.max(maxY - minY + padding * 2, 200);
       const midX = (minX + maxX) / 2;
       const midY = (minY + maxY) / 2;
 
-      const autoScale = Math.min(Math.min(width / graphWidth, height / graphHeight), 1.05);
-      // Same fix as the pipeline layout above: floor at the zoom's real
-      // scaleExtent (0.15), not an arbitrary value that can exceed the
-      // scale actually needed to fit a wide graph on a narrow screen.
+      // Cap at 0.88 — same breathing-room cap as the pipeline layout.
+      const autoScale = Math.min(Math.min(width / graphWidth, height / graphHeight), 0.88);
       const clampedScale = Math.max(autoScale, 0.15);
       boundsRef.current = { midX, midY, scale: clampedScale };
 
@@ -488,6 +508,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         .enter()
         .append('g')
         .attr('class', 'node')
+        .attr('data-node-id', d => d.id)
         .attr('transform', d => `translate(${d.x},${d.y})`)
         .style('cursor', 'pointer')
         .call(drag as unknown as (selection: d3.Selection<SVGGElement, typeof simNodes[0], SVGGElement, unknown>) => void)
@@ -498,6 +519,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
 
       // Background Circle
       nodeGroup.append('circle')
+        .attr('class', 'node-bg')
         .attr('r', d => d.radius)
         .attr('fill', d => {
           if (d.status === 'completed') return withAlpha(SEMANTIC.success, 0.22);
@@ -515,6 +537,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
 
       // Status indicator mini dot at top of circle
       nodeGroup.append('circle')
+        .attr('class', 'node-status-dot')
         .attr('cx', 0)
         .attr('cy', d => -d.radius + 7)
         .attr('r', 3)
@@ -560,12 +583,75 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         });
     }
 
-  }, [localNodes, localEdges, dimensions, layoutMode]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeIdsKey, localEdges, dimensions, layoutMode]);
+
+  // ── Effect 2: status-only visual patch ───────────────────────────────────
+  // Runs whenever any node's status changes without rebuilding the SVG.
+  // This preserves the current zoom/pan transform completely.
+  useEffect(() => {
+    if (!svgRef.current || localNodes.length === 0) return;
+    const svg = d3.select(svgRef.current);
+
+    if (layoutMode === 'pipeline') {
+      // Patch each topic-card group
+      svg.selectAll<SVGGElement, RoadmapNode>('g.topic-card').each(function() {
+        const g = d3.select(this);
+        const nodeId = this.getAttribute('data-node-id');
+        const node = localNodes.find(n => n.id === nodeId);
+        if (!node) return;
+
+        // Card background
+        g.select('.node-bg')
+          .attr('fill', getStatusBgColor(node.status))
+          .attr('stroke', getStatusBorderColor(node.status))
+          .attr('stroke-width', node.status === 'in_progress' ? 1.8 : 1);
+
+        // Status dot
+        g.select('.node-status-dot')
+          .attr('fill', node.status === 'completed' ? SEMANTIC.success : node.status === 'in_progress' ? getAccentColor() : '#3F3F46');
+
+        // Check mark — add if newly completed, remove otherwise
+        g.select('.node-check').remove();
+        if (node.status === 'completed') {
+          const CARD_WIDTH = 230;
+          const CARD_HEIGHT = 50;
+          g.append('text')
+            .attr('class', 'node-check')
+            .attr('x', CARD_WIDTH - 14)
+            .attr('y', CARD_HEIGHT / 2 + 4)
+            .attr('text-anchor', 'end')
+            .attr('font-size', '11px')
+            .attr('fill', SEMANTIC.success)
+            .text('✓');
+        }
+      });
+    } else {
+      // Patch each network node group
+      svg.selectAll<SVGGElement, RoadmapNode>('g.node').each(function() {
+        const g = d3.select(this);
+        const nodeId = this.getAttribute('data-node-id');
+        const node = localNodes.find(n => n.id === nodeId);
+        if (!node) return;
+
+        // Background circle
+        g.select('.node-bg')
+          .attr('fill', node.status === 'completed' ? withAlpha(SEMANTIC.success, 0.22) : node.status === 'in_progress' ? withAlpha(getAccentColor(), 0.22) : '#151926')
+          .attr('stroke', node.status === 'completed' ? SEMANTIC.success : node.status === 'in_progress' ? getAccentColor() : getPhaseColor(node.phase))
+          .attr('stroke-width', node.status === 'in_progress' ? 3.5 : 2.5);
+
+        // Status dot
+        g.select('.node-status-dot')
+          .attr('fill', node.status === 'completed' ? SEMANTIC.success : node.status === 'in_progress' ? getAccentColor() : 'rgba(255,255,255,0.2)');
+      });
+    }
+  }, [localNodes, layoutMode]);
 
   const handleStatusChange = (id: string, status: RoadmapNode['status']) => {
     setLocalTopicStatus(id, status);
     setSelected(prev => prev ? { ...prev, status } : null);
   };
+
 
   const handleDelete = (id: string) => {
     deleteTopic(id);

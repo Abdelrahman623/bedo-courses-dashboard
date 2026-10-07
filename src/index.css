@@ -286,6 +286,10 @@ body {
   border-radius: 9999px;
   outline: none;
   background: rgba(255, 255, 255, 0.08);
+  /* Prevents the mobile browser from triggering a pinch-zoom gesture while
+     the user drags the slider thumb — the browser was interpreting the
+     horizontal drag as a multi-touch zoom event. */
+  touch-action: none;
 }
 .project-range::-webkit-slider-thumb {
   -webkit-appearance: none;

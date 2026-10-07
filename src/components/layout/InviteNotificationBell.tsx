@@ -31,6 +31,13 @@ export const InviteNotificationBell: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Also close on Escape key
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   const handleOpen = () => {
     setOpen(v => !v);
     if (!open && unreadCount > 0) markRead();
@@ -72,8 +79,16 @@ export const InviteNotificationBell: React.FC = () => {
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border border-white/[0.08] bg-[#131722] shadow-2xl shadow-black/60 z-50 overflow-hidden">
-          <div className="px-4 py-3 border-b border-white/[0.06]">
+          <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
             <p className="text-xs font-semibold text-white">Project Invitations</p>
+            <button
+              onClick={() => setOpen(false)}
+              className="p-1 rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+              title="Close (Esc)"
+              aria-label="Close invitations"
+            >
+              <X size={14} />
+            </button>
           </div>
 
           {incoming.length === 0 ? (

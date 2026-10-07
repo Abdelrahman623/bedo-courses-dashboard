@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, LogOut, Sparkles, Flame, Target, Compass, FileText, CheckCheck, X, Menu, GraduationCap, Route } from 'lucide-react';
-import { InviteNotificationBell } from './InviteNotificationBell';
+import { Bell, LogOut, Sparkles, Flame, Target, Compass, FileText, CheckCheck, X, Menu, Check, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../hooks/useAuth';
 import { useSessionStore } from '../../store/sessionStore';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import { useNotesStore } from '../../store/notesStore';
 import { useUIStore } from '../../store/uiStore';
+import { useInvitesStore } from '../../store/invitesStore';
+import { useProjectsStore } from '../../store/projectsStore';
 import { loadUserState, queueUserState } from '../../lib/userState';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -38,15 +39,17 @@ export const TopBar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, profile, signOut } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { currentStreak, weeklyMins } = useSessionStore();
   const { localNodes } = useRoadmapStore();
   const { notes } = useNotesStore();
   const toggleMobileSidebar = useUIStore(s => s.toggleMobileSidebar);
-  const mode = useUIStore(s => s.mode);
-  const setMode = useUIStore(s => s.setMode);
+  const { incoming, unreadCount: inviteUnreadCount, fetchIncoming, respondToInvite, markRead, subscribeIncoming } = useInvitesStore();
+  const { fetchProjects } = useProjectsStore();
 
   const [showMenu, setShowMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [respondingInvite, setRespondingInvite] = useState<string | null>(null);
 
   // Read / dismissed state belongs to the account, not the browser, so it
   // follows you to another device instead of resetting. Stored under the
@@ -64,6 +67,33 @@ export const TopBar: React.FC = () => {
       });
     return () => { alive = false; };
   }, [user?.id]);
+
+  // Close any open panel on Escape — the most natural keyboard dismissal.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowNotifications(false);
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Invite fetch + realtime subscription
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void fetchIncoming();
+    const unsub = subscribeIncoming();
+    return unsub;
+  }, [isAuthenticated, fetchIncoming, subscribeIncoming]);
+
+  const handleRespondInvite = async (inviteId: string, status: 'accepted' | 'declined') => {
+    setRespondingInvite(inviteId);
+    await respondToInvite(inviteId, status);
+    setRespondingInvite(null);
+    if (status === 'accepted') void fetchProjects();
+  };
 
   const persistNotifications = (read: string[], dismissed: string[]) => {
     queueUserState('notifications', { read, dismissed });
@@ -245,54 +275,14 @@ export const TopBar: React.FC = () => {
 
       {/* Actions */}
       <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
-        {/* Mode Switcher */}
-        <div
-          role="tablist"
-          aria-label="Operating Mode"
-          className="flex bg-white/[0.04] border border-white/[0.08] rounded-lg p-0.5"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'courses'}
-            onClick={() => setMode('courses')}
-            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
-              mode === 'courses'
-                ? 'bg-accent-amber/15 text-accent-amber border border-accent-amber/30'
-                : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
-            }`}
-            title="Courses Mode: Sequential Roadmaps"
-          >
-            <Route size={12} />
-            <span className="hidden sm:inline">Courses</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'academic'}
-            onClick={() => setMode('academic')}
-            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
-              mode === 'academic'
-                ? 'bg-accent-amber/15 text-accent-amber border border-accent-amber/30'
-                : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
-            }`}
-            title="Academic Mode: Concurrent College Term"
-          >
-            <GraduationCap size={12} />
-            <span className="hidden sm:inline">Academic</span>
-          </button>
-        </div>
-
-        {/* Invite Notifications */}
-        <InviteNotificationBell />
-
-        {/* Notifications Center */}
+        {/* ── Unified Notification Bell ── */}
         <div className="relative">
           <button
             type="button"
             onClick={() => {
               setShowNotifications(v => !v);
               setShowMenu(false);
+              if (!showNotifications && inviteUnreadCount > 0) markRead();
             }}
             className={`p-2 rounded-lg transition-colors cursor-pointer relative ${
               showNotifications
@@ -302,8 +292,8 @@ export const TopBar: React.FC = () => {
             title="Notifications & Updates"
             aria-label="Notifications"
           >
-            <Bell size={16} className={unreadCount > 0 ? 'text-accent-highlight' : ''} />
-            {unreadCount > 0 && (
+            <Bell size={16} className={(unreadCount + inviteUnreadCount) > 0 ? 'text-accent-highlight' : ''} />
+            {(unreadCount + inviteUnreadCount) > 0 && (
               <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-accent-highlight animate-pulse shadow-[0_0_8px_rgb(var(--c-highlight)/0.6)]" />
             )}
           </button>
@@ -322,32 +312,79 @@ export const TopBar: React.FC = () => {
                   transition={{ duration: 0.12, ease: 'easeOut' }}
                   className="absolute right-0 top-10 w-80 sm:w-96 max-w-[calc(100vw-1.5rem)] bg-[#131722] border border-white/[0.10] rounded-2xl shadow-2xl overflow-hidden z-50 flex flex-col divide-y divide-white/[0.06]"
                 >
-                  {/* Notifications Header */}
+                  {/* Header */}
                   <div className="p-3.5 flex items-center justify-between bg-[#161B28]">
                     <div className="flex items-center gap-2">
                       <h3 className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
                         <Bell size={13} className="text-accent-highlight" />
                         <span>Notifications</span>
                       </h3>
-                      {unreadCount > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-accent-highlight/15 text-accent-highlight border border-accent-highlight/25 font-mono font-bold">
-                          {unreadCount} new
+                      {(unreadCount + inviteUnreadCount) > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-highlight/15 text-accent-highlight border border-accent-highlight/25 font-mono font-bold">
+                          {unreadCount + inviteUnreadCount} new
                         </span>
                       )}
                     </div>
-                    {unreadCount > 0 && (
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={handleMarkAllRead}
+                          className="text-[11px] text-zinc-400 hover:text-accent-amber transition-colors flex items-center gap-1 cursor-pointer font-medium"
+                        >
+                          <CheckCheck size={12} />
+                          <span>Mark all read</span>
+                        </button>
+                      )}
                       <button
-                        onClick={handleMarkAllRead}
-                        className="text-[11px] text-zinc-400 hover:text-accent-amber transition-colors flex items-center gap-1 cursor-pointer font-medium"
+                        onClick={() => setShowNotifications(false)}
+                        className="p-1 rounded-lg text-zinc-500 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+                        title="Close (Esc)"
+                        aria-label="Close notifications"
                       >
-                        <CheckCheck size={12} />
-                        <span>Mark all read</span>
+                        <X size={14} />
                       </button>
-                    )}
+                    </div>
                   </div>
 
-                  {/* Notifications List */}
-                  <div className="max-h-[380px] overflow-y-auto divide-y divide-white/[0.04]">
+                  {/* ── Project Invitations section (shown only when pending) ── */}
+                  {incoming.length > 0 && (
+                    <div className="divide-y divide-white/[0.04]">
+                      <div className="px-3.5 py-2 flex items-center gap-1.5 bg-accent-amber/5">
+                        <Users size={11} className="text-accent-amber" />
+                        <span className="text-[10px] font-semibold text-accent-amber uppercase tracking-wider">Project Invitations</span>
+                        <span className="ml-auto text-[10px] font-mono font-bold text-accent-amber bg-accent-amber/15 border border-accent-amber/25 px-1.5 rounded-full">{incoming.length}</span>
+                      </div>
+                      {incoming.map(invite => (
+                        <div key={invite.id} className="px-3.5 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-white truncate">{invite.project?.title ?? 'A project'}</p>
+                            <p className="text-[10px] text-zinc-500 mt-0.5">
+                              From <span className="text-zinc-400">{invite.inviter_profile?.name ?? 'Unknown'}</span>
+                            </p>
+                          </div>
+                          <div className="flex gap-1.5 flex-shrink-0">
+                            <button
+                              onClick={() => void handleRespondInvite(invite.id, 'accepted')}
+                              disabled={respondingInvite === invite.id}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/25 transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              <Check size={11} /> Accept
+                            </button>
+                            <button
+                              onClick={() => void handleRespondInvite(invite.id, 'declined')}
+                              disabled={respondingInvite === invite.id}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-white/[0.04] hover:bg-rose-500/10 text-zinc-400 hover:text-rose-400 border border-white/[0.08] hover:border-rose-500/25 transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              <X size={11} /> Decline
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── System Notifications list ── */}
+                  <div className="max-h-[340px] overflow-y-auto divide-y divide-white/[0.04]">
                     {visibleNotifications.length > 0 ? (
                       visibleNotifications.map(item => {
                         const isRead = readIds.includes(item.id);
@@ -381,8 +418,6 @@ export const TopBar: React.FC = () => {
                                 {item.description}
                               </p>
                             </div>
-
-                            {/* Status indicator / Dismiss */}
                             <div className="flex flex-col items-end gap-1 flex-shrink-0">
                               {!isRead && (
                                 <span className="w-1.5 h-1.5 rounded-full bg-accent-highlight mt-1" />
@@ -415,7 +450,7 @@ export const TopBar: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Notifications Footer */}
+                  {/* Footer */}
                   {visibleNotifications.length > 0 && (
                     <div className="p-2.5 bg-[#10141E] flex items-center justify-between text-[11px] text-zinc-500 px-3.5">
                       <span>Click any item to view</span>

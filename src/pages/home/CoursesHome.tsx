@@ -42,9 +42,9 @@ export const CoursesHome: React.FC = () => {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="p-6 max-w-6xl mx-auto space-y-5">
       {/* ── Header Bar ────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-white">{greeting}, {userName}</h1>
@@ -327,20 +327,13 @@ export const CoursesHome: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Activity Heatmap Section (Dense, High-signal) ─────────── */}
-      <Card hover={false} padding="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-sm font-semibold tracking-tight text-white">Study Consistency Heatmap</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Recording daily study duration across the last 26 weeks</p>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-zinc-400">
-            <span className="font-mono text-accent-secondary font-medium">
-              {minsToHHMM(weeklyMins)} logged this week
-            </span>
-          </div>
+      {/* ── Activity Heatmap Section ───────────────────────────────── */}
+      <Card hover={false} padding="p-5">
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold tracking-tight text-white">Study Consistency Heatmap</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">Daily study activity — switch between 3M, 6M, 1Y or full history</p>
         </div>
-        <Heatmap activity={activity} weeks={26} />
+        <Heatmap activity={activity} />
       </Card>
     </div>
   );
