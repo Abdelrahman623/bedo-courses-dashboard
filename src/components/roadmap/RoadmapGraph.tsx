@@ -61,6 +61,11 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
   // Store bounds for reset zoom
   const boundsRef = useRef<{ midX: number; midY: number; scale: number } | null>(null);
 
+  // Always-current snapshot of localNodes so D3 click closures never read stale status.
+  const localNodesRef = useRef(localNodes);
+  localNodesRef.current = localNodes;
+
+
   // ── Presence: join / leave channel when projectId changes ────────────────
   useEffect(() => {
     if (!projectId || !user?.id) return;
@@ -297,7 +302,10 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         .style('cursor', 'pointer')
         .on('click', (_, d) => {
           setConfirmDelete(false);
-          setSelected(d);
+          // Look up the live node so the SlideOver always reflects the current status,
+          // not the stale datum that was bound when the SVG was built.
+          const live = localNodesRef.current.find(n => n.id === d.id) ?? d;
+          setSelected(live);
         });
 
       // Card Background
@@ -514,7 +522,8 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
         .call(drag as unknown as (selection: d3.Selection<SVGGElement, typeof simNodes[0], SVGGElement, unknown>) => void)
         .on('click', (_, d) => {
           setConfirmDelete(false);
-          setSelected(d as unknown as RoadmapNode);
+          const live = localNodesRef.current.find(n => n.id === d.id) ?? (d as unknown as RoadmapNode);
+          setSelected(live);
         });
 
       // Background Circle
