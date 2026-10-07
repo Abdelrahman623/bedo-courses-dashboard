@@ -12,7 +12,7 @@ import { FocusWidget } from '../../components/focus/FocusWidget';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { useAuth } from '../../hooks/useAuth';
-import { minsToHHMM, pct } from '../../lib/utils';
+import { pct } from '../../lib/utils';
 
 export const CoursesHome: React.FC = () => {
   const navigate = useNavigate();
