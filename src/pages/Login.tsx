@@ -84,6 +84,23 @@ export const Login: React.FC = () => {
           throw new Error('Username must be 3-24 characters and only contain letters, numbers, underscores, or hyphens.');
         }
 
+        // Validate password strength
+        if (password.length < 8) {
+          throw new Error('Password must be at least 8 characters long.');
+        }
+        if (!/[A-Z]/.test(password)) {
+          throw new Error('Password must contain at least one uppercase letter.');
+        }
+        if (!/[a-z]/.test(password)) {
+          throw new Error('Password must contain at least one lowercase letter.');
+        }
+        if (!/[0-9]/.test(password)) {
+          throw new Error('Password must contain at least one number.');
+        }
+        if (!/[@.$*!%#?&_\-+]/.test(password)) {
+          throw new Error('Password must contain at least one special character (@ . $ * ! % # ? & _ - +).');
+        }
+
         // Check if username is already taken (RLS-safe: returns a bare boolean,
         // never anyone's id or email).
         const { data: usernameTaken } = await supabase.rpc('username_exists', {
@@ -292,23 +309,71 @@ export const Login: React.FC = () => {
 
             {/* Password (for signin & signup) */}
             {mode !== 'forgot' && (
-              <div className="relative">
-                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  placeholder="Password"
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); clearMessages(); }}
-                  required
-                  className="w-full bg-[#0D1017] border border-white/[0.08] rounded-lg pl-9 pr-10 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-accent-amber/50 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
-                >
-                  {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
+              <div className="space-y-2">
+                <div className="relative">
+                  <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                  <input
+                    type={showPw ? 'text' : 'password'}
+                    placeholder="Password"
+                    value={password}
+                    onChange={e => { setPassword(e.target.value); clearMessages(); }}
+                    required
+                    className="w-full bg-[#0D1017] border border-white/[0.08] rounded-lg pl-9 pr-10 py-2.5 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-accent-amber/50 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+                  >
+                    {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+
+                {/* Password strength indicator — signup only */}
+                {mode === 'signup' && password.length > 0 && (() => {
+                  const rules = [
+                    { label: '8+ characters',      ok: password.length >= 8 },
+                    { label: 'Uppercase letter',    ok: /[A-Z]/.test(password) },
+                    { label: 'Number',              ok: /[0-9]/.test(password) },
+                    { label: 'Special char (@.$*…)', ok: /[@.$*!%#?&_\-+]/.test(password) },
+                  ];
+                  const score = rules.filter(r => r.ok).length;
+                  const barColors = ['bg-rose-500', 'bg-orange-400', 'bg-yellow-400', 'bg-emerald-400'];
+                  const label = ['Weak', 'Fair', 'Good', 'Strong'][score - 1] ?? '';
+                  return (
+                    <div className="space-y-1.5 px-0.5">
+                      {/* Segmented bar */}
+                      <div className="flex gap-1">
+                        {[0, 1, 2, 3].map(i => (
+                          <div
+                            key={i}
+                            className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                              i < score ? barColors[score - 1] : 'bg-white/[0.08]'
+                            }`}
+                          />
+                        ))}
+                        {score > 0 && (
+                          <span className={`text-[10px] font-semibold ml-1 ${barColors[score - 1].replace('bg-', 'text-')}`}>
+                            {label}
+                          </span>
+                        )}
+                      </div>
+                      {/* Rule checklist */}
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                        {rules.map(r => (
+                          <div key={r.label} className="flex items-center gap-1">
+                            <span className={`text-[10px] ${r.ok ? 'text-emerald-400' : 'text-zinc-600'}`}>
+                              {r.ok ? '✓' : '·'}
+                            </span>
+                            <span className={`text-[10px] ${r.ok ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                              {r.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
