@@ -135,7 +135,8 @@ export const Sidebar: React.FC = () => {
   };
 
   const isSettingsActive = location.pathname.startsWith('/settings');
-  const navSections = buildNavSections(mode);
+  const effectiveMode: CourseMode = academicModeEnabled ? mode : 'courses';
+  const navSections = buildNavSections(effectiveMode);
 
   return (
     <>

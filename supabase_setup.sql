@@ -1194,6 +1194,8 @@ CREATE TABLE IF NOT EXISTS public.system_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE public.system_settings REPLICA IDENTITY FULL;
+
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS system_settings_read ON public.system_settings;
@@ -1201,9 +1203,14 @@ CREATE POLICY system_settings_read ON public.system_settings
   FOR SELECT TO authenticated, anon
   USING (true);
 
-DROP POLICY IF EXISTS system_settings_admin_write ON public.system_settings;
-CREATE POLICY system_settings_admin_write ON public.system_settings
-  FOR ALL TO authenticated
+DROP POLICY IF EXISTS system_settings_admin_insert ON public.system_settings;
+CREATE POLICY system_settings_admin_insert ON public.system_settings
+  FOR INSERT TO authenticated
+  WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS system_settings_admin_update ON public.system_settings;
+CREATE POLICY system_settings_admin_update ON public.system_settings
+  FOR UPDATE TO authenticated
   USING (public.is_admin())
   WITH CHECK (public.is_admin());
 
@@ -1218,9 +1225,10 @@ CREATE OR REPLACE FUNCTION public.set_academic_mode(enabled BOOLEAN)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, auth
 AS $$
 BEGIN
-  IF auth.uid() IS NOT NULL AND NOT public.is_admin() THEN
+  IF auth.uid() IS NULL OR NOT public.is_admin() THEN
     RETURN jsonb_build_object('success', false, 'error', 'Not authorised: admin access required.');
   END IF;
 

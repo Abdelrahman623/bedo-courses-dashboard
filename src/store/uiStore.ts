@@ -11,10 +11,16 @@ import { queueUserState } from '../lib/userState';
 const MODE_STORAGE_KEY = 'bedo_ui_mode';
 const ACADEMIC_ENABLED_STORAGE_KEY = 'bedo_academic_mode_enabled';
 
+function parseBooleanSetting(val: unknown, defaultValue = true): boolean {
+  if (val === false || val === 'false' || val === 0 || val === '0') return false;
+  if (val === true || val === 'true' || val === 1 || val === '1') return true;
+  return defaultValue;
+}
+
 function readStoredAcademicEnabled(): boolean {
   try {
     const stored = localStorage.getItem(ACADEMIC_ENABLED_STORAGE_KEY);
-    return stored !== 'false';
+    return parseBooleanSetting(stored, true);
   } catch {
     return true;
   }
@@ -64,8 +70,8 @@ interface UIState {
   setAcademicModeEnabled: (enabled: boolean) => void;
   fetchAcademicMode: () => Promise<void>;
   subscribeAcademicMode: () => () => void;
-  stopAcademicMode: () => Promise<void>;
-  startAcademicMode: () => Promise<void>;
+  stopAcademicMode: () => Promise<{ success: boolean; error?: string }>;
+  startAcademicMode: () => Promise<{ success: boolean; error?: string }>;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -75,10 +81,12 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleMobileSidebar: () => set(s => ({ mobileSidebarOpen: !s.mobileSidebarOpen })),
 
   academicModeEnabled: readStoredAcademicEnabled(),
-  mode: readStoredMode(),
+  mode: readStoredAcademicEnabled() ? readStoredMode() : 'courses',
 
   setMode: (mode) => {
     if (mode === 'academic' && !get().academicModeEnabled) {
+      writeStoredMode('courses');
+      set({ mode: 'courses' });
       return;
     }
     writeStoredMode(mode);
@@ -87,6 +95,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   toggleMode: () => {
     if (!get().academicModeEnabled) {
+      writeStoredMode('courses');
       set({ mode: 'courses' });
       return;
     }
@@ -97,11 +106,11 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setAcademicModeEnabled: (enabled: boolean) => {
     writeStoredAcademicEnabled(enabled);
-    if (!enabled && get().mode === 'academic') {
+    if (!enabled) {
       writeStoredMode('courses');
       set({ academicModeEnabled: false, mode: 'courses' });
     } else {
-      set({ academicModeEnabled: enabled });
+      set({ academicModeEnabled: true });
     }
   },
 
@@ -113,26 +122,31 @@ export const useUIStore = create<UIState>((set, get) => ({
         .select('value')
         .eq('key', 'academic_mode_enabled')
         .maybeSingle();
-      if (!error && data && typeof data.value !== 'undefined') {
-        const isEnabled = Boolean(data.value);
+
+      if (error) {
+        console.warn('[UIStore] Failed to fetch system_settings for academic_mode:', error.message);
+        return;
+      }
+      if (data && typeof data.value !== 'undefined') {
+        const isEnabled = parseBooleanSetting(data.value, true);
         get().setAcademicModeEnabled(isEnabled);
       }
     } catch (err) {
-      console.warn('[UIStore] Failed to fetch system_settings for academic_mode:', err);
+      console.warn('[UIStore] Error fetching system_settings:', err);
     }
   },
 
   subscribeAcademicMode: () => {
     if (!isSupabaseConfigured) return () => {};
     const channel = supabase
-      .channel('global-system-settings')
+      .channel('global-system-settings-changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'system_settings', filter: 'key=eq.academic_mode_enabled' },
+        { event: '*', schema: 'public', table: 'system_settings' },
         (payload) => {
           const newRow = payload.new as { key?: string; value?: unknown } | null;
-          if (newRow && typeof newRow.value !== 'undefined') {
-            const isEnabled = Boolean(newRow.value);
+          if (newRow?.key === 'academic_mode_enabled') {
+            const isEnabled = parseBooleanSetting(newRow.value, true);
             get().setAcademicModeEnabled(isEnabled);
           }
         }
@@ -145,26 +159,39 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   stopAcademicMode: async () => {
+    // 1. Immediately update local state
     writeStoredAcademicEnabled(false);
     writeStoredMode('courses');
     set({ academicModeEnabled: false, mode: 'courses' });
     queueUserState('preferences', { academic_mode_enabled: false });
 
-    if (isSupabaseConfigured) {
-      try {
-        const { error } = await supabase.rpc('set_academic_mode', { enabled: false });
-        if (error) {
-          await supabase
-            .from('system_settings')
-            .upsert({
-              key: 'academic_mode_enabled',
-              value: false,
-              updated_at: new Date().toISOString(),
-            }, { onConflict: 'key' });
-        }
-      } catch (err) {
-        console.warn('[UIStore] Failed to stop academic mode globally in database:', err);
+    if (!isSupabaseConfigured) return { success: true };
+
+    try {
+      // 2. Try RPC set_academic_mode
+      const { data, error: rpcErr } = await supabase.rpc('set_academic_mode', { enabled: false });
+      if (!rpcErr && data && data.success !== false) {
+        return { success: true };
       }
+
+      // 3. Fallback to direct upsert
+      const { error: upsertErr } = await supabase
+        .from('system_settings')
+        .upsert({
+          key: 'academic_mode_enabled',
+          value: false,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'key' });
+
+      if (upsertErr) {
+        console.error('[UIStore] Failed to stop academic mode globally in database:', upsertErr);
+        return { success: false, error: upsertErr.message };
+      }
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown database error';
+      console.error('[UIStore] stopAcademicMode threw:', err);
+      return { success: false, error: msg };
     }
   },
 
@@ -174,21 +201,31 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({ academicModeEnabled: true, mode: 'academic' });
     queueUserState('preferences', { academic_mode_enabled: true });
 
-    if (isSupabaseConfigured) {
-      try {
-        const { error } = await supabase.rpc('set_academic_mode', { enabled: true });
-        if (error) {
-          await supabase
-            .from('system_settings')
-            .upsert({
-              key: 'academic_mode_enabled',
-              value: true,
-              updated_at: new Date().toISOString(),
-            }, { onConflict: 'key' });
-        }
-      } catch (err) {
-        console.warn('[UIStore] Failed to start academic mode globally in database:', err);
+    if (!isSupabaseConfigured) return { success: true };
+
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('set_academic_mode', { enabled: true });
+      if (!rpcErr && data && data.success !== false) {
+        return { success: true };
       }
+
+      const { error: upsertErr } = await supabase
+        .from('system_settings')
+        .upsert({
+          key: 'academic_mode_enabled',
+          value: true,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'key' });
+
+      if (upsertErr) {
+        console.error('[UIStore] Failed to start academic mode globally in database:', upsertErr);
+        return { success: false, error: upsertErr.message };
+      }
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown database error';
+      console.error('[UIStore] startAcademicMode threw:', err);
+      return { success: false, error: msg };
     }
   },
 }));

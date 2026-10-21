@@ -11,5 +11,6 @@ import { AcademicHome } from './home/AcademicHome';
 // changes which of these renders — neither mode's data is touched.
 export const Home: React.FC = () => {
   const mode = useUIStore(s => s.mode);
-  return mode === 'academic' ? <AcademicHome /> : <CoursesHome />;
+  const academicModeEnabled = useUIStore(s => s.academicModeEnabled);
+  return (mode === 'academic' && academicModeEnabled) ? <AcademicHome /> : <CoursesHome />;
 };

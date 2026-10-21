@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
@@ -32,6 +32,8 @@ export const AppLayout: React.FC = () => {
   const fetchSessions = useSessionStore(s => s.fetchSessions);
   const timerRunning  = useSessionStore(s => s.timerRunning);
   const tickTimer     = useSessionStore(s => s.tickTimer);
+  const navigate = useNavigate();
+  const academicModeEnabled   = useUIStore(s => s.academicModeEnabled);
   const fetchAcademicMode     = useUIStore(s => s.fetchAcademicMode);
   const subscribeAcademicMode = useUIStore(s => s.subscribeAcademicMode);
 
@@ -39,8 +41,29 @@ export const AppLayout: React.FC = () => {
   useEffect(() => {
     void fetchAcademicMode();
     const unsub = subscribeAcademicMode();
-    return () => unsub();
+
+    // Re-check whenever window regains focus (e.g. user switches tabs)
+    const onFocus = () => void fetchAcademicMode();
+    window.addEventListener('focus', onFocus);
+
+    // Periodic safety poll every 20s in case websocket is disconnected or suspended
+    const interval = setInterval(() => void fetchAcademicMode(), 20000);
+
+    return () => {
+      unsub();
+      window.removeEventListener('focus', onFocus);
+      clearInterval(interval);
+    };
   }, [fetchAcademicMode, subscribeAcademicMode]);
+
+  // If Academic mode was stopped globally while user is on an academic-only route, redirect to /courses
+  useEffect(() => {
+    if (!academicModeEnabled) {
+      if (['/timetable', '/deadlines', '/grades'].some(p => location.pathname.startsWith(p))) {
+        navigate('/courses', { replace: true });
+      }
+    }
+  }, [academicModeEnabled, location.pathname, navigate]);
 
   // The Pomodoro/stopwatch instrument is usable from more than one screen
   // now (Home's Focus card, the full Tracker page), so the ticking interval

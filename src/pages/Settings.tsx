@@ -963,10 +963,14 @@ export const Settings: React.FC = () => {
                       variant="danger"
                       size="sm"
                       icon={<Square size={12} className="fill-current" />}
-                      onClick={() => {
-                        stopAcademicMode();
-                        setDeleteSuccess('Academic mode has been stopped. Dashboard switched to standard Courses mode.');
-                        setTimeout(() => setDeleteSuccess(null), 4000);
+                      onClick={async () => {
+                        const res = await stopAcademicMode();
+                        if (res.success) {
+                          setDeleteSuccess('Academic mode has been stopped globally for all users.');
+                          setDeleteError(null);
+                        } else {
+                          setDeleteError(`Could not update database: ${res.error || 'Unknown error'}. Please run supabase_migration_system_settings.sql in Supabase SQL Editor.`);
+                        }
                       }}
                     >
                       Stop Academic Mode
@@ -976,10 +980,14 @@ export const Settings: React.FC = () => {
                       variant="primary"
                       size="sm"
                       icon={<Play size={12} className="fill-current" />}
-                      onClick={() => {
-                        startAcademicMode();
-                        setDeleteSuccess('Academic mode has been started.');
-                        setTimeout(() => setDeleteSuccess(null), 4000);
+                      onClick={async () => {
+                        const res = await startAcademicMode();
+                        if (res.success) {
+                          setDeleteSuccess('Academic mode has been started globally for all users.');
+                          setDeleteError(null);
+                        } else {
+                          setDeleteError(`Could not update database: ${res.error || 'Unknown error'}. Please run supabase_migration_system_settings.sql in Supabase SQL Editor.`);
+                        }
                       }}
                     >
                       Start Academic Mode

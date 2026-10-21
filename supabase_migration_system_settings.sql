@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS public.system_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Ensure full row is sent on UPDATE events in Supabase Realtime
+ALTER TABLE public.system_settings REPLICA IDENTITY FULL;
+
 -- 2. Row Level Security
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
 
@@ -21,9 +24,14 @@ CREATE POLICY system_settings_read ON public.system_settings
   USING (true);
 
 -- Only admins can insert or update system settings
-DROP POLICY IF EXISTS system_settings_admin_write ON public.system_settings;
-CREATE POLICY system_settings_admin_write ON public.system_settings
-  FOR ALL TO authenticated
+DROP POLICY IF EXISTS system_settings_admin_insert ON public.system_settings;
+CREATE POLICY system_settings_admin_insert ON public.system_settings
+  FOR INSERT TO authenticated
+  WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS system_settings_admin_update ON public.system_settings;
+CREATE POLICY system_settings_admin_update ON public.system_settings
+  FOR UPDATE TO authenticated
   USING (public.is_admin())
   WITH CHECK (public.is_admin());
 
@@ -36,14 +44,15 @@ INSERT INTO public.system_settings (key, value)
 VALUES ('academic_mode_enabled', 'true'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
--- 5. RPC function to allow admins to set academic mode safely
+-- 5. RPC function to allow admins to set academic mode safely (bypasses RLS via SECURITY DEFINER)
 CREATE OR REPLACE FUNCTION public.set_academic_mode(enabled BOOLEAN)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, auth
 AS $$
 BEGIN
-  IF auth.uid() IS NOT NULL AND NOT public.is_admin() THEN
+  IF auth.uid() IS NULL OR NOT public.is_admin() THEN
     RETURN jsonb_build_object('success', false, 'error', 'Not authorised: admin access required.');
   END IF;
 
@@ -60,7 +69,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.set_academic_mode(BOOLEAN) TO authenticated, service_role;
 
--- 6. Add system_settings to realtime publication if not already present
+-- 6. Add system_settings to realtime publication for instant zero-refresh sync
 DO $$
 BEGIN
   IF EXISTS (

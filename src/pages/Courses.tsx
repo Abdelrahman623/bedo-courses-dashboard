@@ -50,7 +50,9 @@ const TEMPLATE_CATEGORIES = [
 
 export const Courses: React.FC = () => {
   const navigate = useNavigate();
-  const uiMode = useUIStore(s => s.mode);
+  const rawMode = useUIStore(s => s.mode);
+  const academicModeEnabled = useUIStore(s => s.academicModeEnabled);
+  const uiMode = academicModeEnabled ? rawMode : 'courses';
   const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
   const { isAdmin } = useAuth();
   const {
