@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { useAuth } from '../../hooks/useAuth';
@@ -33,9 +34,12 @@ export const AppLayout: React.FC = () => {
   const timerRunning  = useSessionStore(s => s.timerRunning);
   const tickTimer     = useSessionStore(s => s.tickTimer);
   const navigate = useNavigate();
+
   const academicModeEnabled   = useUIStore(s => s.academicModeEnabled);
   const fetchAcademicMode     = useUIStore(s => s.fetchAcademicMode);
   const subscribeAcademicMode = useUIStore(s => s.subscribeAcademicMode);
+  const toast                 = useUIStore(s => s.toast);
+  const hideToast             = useUIStore(s => s.hideToast);
 
   // Sync global system settings (academic mode enabled/stopped) for all users
   useEffect(() => {
@@ -46,8 +50,8 @@ export const AppLayout: React.FC = () => {
     const onFocus = () => void fetchAcademicMode();
     window.addEventListener('focus', onFocus);
 
-    // Periodic safety poll every 20s in case websocket is disconnected or suspended
-    const interval = setInterval(() => void fetchAcademicMode(), 20000);
+    // Periodic safety poll every 15s in case websocket is disconnected or suspended
+    const interval = setInterval(() => void fetchAcademicMode(), 15000);
 
     return () => {
       unsub();
@@ -55,6 +59,11 @@ export const AppLayout: React.FC = () => {
       clearInterval(interval);
     };
   }, [fetchAcademicMode, subscribeAcademicMode]);
+
+  // Also check whenever location changes to guarantee real-time page transitions
+  useEffect(() => {
+    void fetchAcademicMode();
+  }, [location.pathname, fetchAcademicMode]);
 
   // If Academic mode was stopped globally while user is on an academic-only route, redirect to /courses
   useEffect(() => {
@@ -68,19 +77,13 @@ export const AppLayout: React.FC = () => {
   // The Pomodoro/stopwatch instrument is usable from more than one screen
   // now (Home's Focus card, the full Tracker page), so the ticking interval
   // lives here — mounted for the whole authenticated session — instead of
-  // inside Tracker.tsx. A timer started from Home keeps counting down if
-  // you navigate to Notes and back, rather than freezing because the one
-  // component with a setInterval unmounted.
+  // inside Tracker.tsx.
   useEffect(() => {
     if (!timerRunning) return;
     const interval = setInterval(() => tickTimer(), 1000);
     return () => clearInterval(interval);
   }, [timerRunning, tickTimer]);
 
-  // Nothing is cached in the browser any more, so this is where the signed-in
-  // account's data is loaded — once, on entry, and again whenever the account
-  // changes. Individual pages used to rely on whatever localStorage happened
-  // to hold, which is exactly how one user's data ended up on another's screen.
   useEffect(() => {
     if (!user?.id) return;
     void fetchAll();
@@ -90,7 +93,60 @@ export const AppLayout: React.FC = () => {
   }, [user?.id, fetchAll, fetchNotes, fetchProjects, fetchSessions]);
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-bg-base">
+    <div className="flex h-dvh overflow-hidden bg-bg-base relative">
+      {/* ── Global UI Notification Toast ──────────────────────────────────── */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key={toast.id}
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.18 }}
+            className="fixed top-4 right-4 z-50 max-w-md w-full shadow-2xl rounded-xl border p-4 pointer-events-auto backdrop-blur-md"
+            style={{
+              backgroundColor: toast.type === 'error'
+                ? 'rgba(38, 12, 16, 0.95)'
+                : toast.type === 'success'
+                ? 'rgba(10, 32, 22, 0.95)'
+                : 'rgba(15, 23, 42, 0.95)',
+              borderColor: toast.type === 'error'
+                ? 'rgba(244, 63, 94, 0.35)'
+                : toast.type === 'success'
+                ? 'rgba(16, 185, 129, 0.35)'
+                : 'rgba(59, 130, 246, 0.35)',
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                {toast.type === 'error' && <AlertTriangle size={18} className="text-rose-400" />}
+                {toast.type === 'success' && <CheckCircle2 size={18} className="text-emerald-400" />}
+                {toast.type === 'info' && <Info size={18} className="text-blue-400" />}
+              </div>
+              <div className="flex-1 min-w-0 pr-1">
+                {toast.title && (
+                  <h4 className={`text-xs font-bold leading-none mb-1 ${
+                    toast.type === 'error' ? 'text-rose-300' : toast.type === 'success' ? 'text-emerald-300' : 'text-blue-300'
+                  }`}>
+                    {toast.title}
+                  </h4>
+                )}
+                <p className="text-xs text-zinc-200 leading-relaxed break-words font-medium">
+                  {toast.message}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={hideToast}
+                className="flex-shrink-0 p-1 text-zinc-400 hover:text-white rounded-lg hover:bg-white/[0.08] transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar />

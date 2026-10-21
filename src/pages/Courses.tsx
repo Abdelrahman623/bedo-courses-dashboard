@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, BookOpen, ExternalLink, Calendar, Trash2, Sparkles, Search, Layers, Upload, CheckCircle2, ChevronRight, FileText, ArrowRight, StickyNote, GraduationCap, CalendarDays, CalendarClock, Route, Square } from 'lucide-react';
+import { Plus, BookOpen, ExternalLink, Calendar, Trash2, Sparkles, Search, Layers, Upload, CheckCircle2, ChevronRight, FileText, ArrowRight, StickyNote, GraduationCap, CalendarDays, CalendarClock, Route, Square, Loader2 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -52,6 +52,7 @@ export const Courses: React.FC = () => {
   const navigate = useNavigate();
   const rawMode = useUIStore(s => s.mode);
   const academicModeEnabled = useUIStore(s => s.academicModeEnabled);
+  const isUpdatingAcademicMode = useUIStore(s => s.isUpdatingAcademicMode);
   const uiMode = academicModeEnabled ? rawMode : 'courses';
   const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
   const { isAdmin } = useAuth();
@@ -379,7 +380,7 @@ export const Courses: React.FC = () => {
       source_url: courseForm.source_url.trim() || undefined,
       start_date: courseForm.start_date,
       status: courseForm.status,
-      mode: courseForm.mode,
+      mode: academicModeEnabled ? courseForm.mode : 'courses',
     });
     setSaving(false);
     setShowCourseModal(false);
@@ -607,13 +608,14 @@ export const Courses: React.FC = () => {
                 <Button
                   variant="danger"
                   size="sm"
-                  icon={<Square size={12} className="fill-current" />}
-                  onClick={() => {
-                    stopAcademicMode();
+                  disabled={isUpdatingAcademicMode}
+                  icon={isUpdatingAcademicMode ? <Loader2 size={12} className="animate-spin" /> : <Square size={12} className="fill-current" />}
+                  onClick={async () => {
+                    await stopAcademicMode();
                   }}
                   title="Stop Academic Mode (Admin)"
                 >
-                  Stop Academic Mode
+                  {isUpdatingAcademicMode ? 'Stopping...' : 'Stop Academic Mode'}
                 </Button>
               )}
               <Button
@@ -1360,42 +1362,44 @@ export const Courses: React.FC = () => {
       >
         <form onSubmit={handleAddCourse} className="space-y-4">
           {/* Mode Selector */}
-          <div>
-            <label className="block text-xs text-txt-muted mb-1.5 font-medium">Course Mode</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setCourseForm(f => ({ ...f, mode: 'academic' }))}
-                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
-                  courseForm.mode === 'academic'
-                    ? 'bg-accent-amber/15 border-accent-amber/50 text-white shadow-sm'
-                    : 'bg-[#0D1017] border-white/[0.08] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
-                }`}
-              >
-                <GraduationCap size={16} className={courseForm.mode === 'academic' ? 'text-accent-amber mt-0.5' : 'text-zinc-500 mt-0.5'} />
-                <div className="min-w-0">
-                  <div className={`text-xs font-semibold ${courseForm.mode === 'academic' ? 'text-accent-amber' : 'text-zinc-300'}`}>Academic Mode</div>
-                  <div className="text-[10px] text-zinc-500 mt-0.5 leading-snug">College term course with timetable, deadlines & GPA</div>
-                </div>
-              </button>
+          {academicModeEnabled && (
+            <div>
+              <label className="block text-xs text-txt-muted mb-1.5 font-medium">Course Mode</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCourseForm(f => ({ ...f, mode: 'academic' }))}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
+                    courseForm.mode === 'academic'
+                      ? 'bg-accent-amber/15 border-accent-amber/50 text-white shadow-sm'
+                      : 'bg-[#0D1017] border-white/[0.08] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <GraduationCap size={16} className={courseForm.mode === 'academic' ? 'text-accent-amber mt-0.5' : 'text-zinc-500 mt-0.5'} />
+                  <div className="min-w-0">
+                    <div className={`text-xs font-semibold ${courseForm.mode === 'academic' ? 'text-accent-amber' : 'text-zinc-300'}`}>Academic Mode</div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5 leading-snug">College term course with timetable, deadlines & GPA</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setCourseForm(f => ({ ...f, mode: 'courses' }))}
-                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
-                  courseForm.mode === 'courses'
-                    ? 'bg-accent-amber/15 border-accent-amber/50 text-white shadow-sm'
-                    : 'bg-[#0D1017] border-white/[0.08] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
-                }`}
-              >
-                <Route size={16} className={courseForm.mode === 'courses' ? 'text-accent-amber mt-0.5' : 'text-zinc-500 mt-0.5'} />
-                <div className="min-w-0">
-                  <div className={`text-xs font-semibold ${courseForm.mode === 'courses' ? 'text-accent-amber' : 'text-zinc-300'}`}>Courses Mode</div>
-                  <div className="text-[10px] text-zinc-500 mt-0.5 leading-snug">Sequential self-paced curriculum or roadmap</div>
-                </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setCourseForm(f => ({ ...f, mode: 'courses' }))}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
+                    courseForm.mode === 'courses'
+                      ? 'bg-accent-amber/15 border-accent-amber/50 text-white shadow-sm'
+                      : 'bg-[#0D1017] border-white/[0.08] text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <Route size={16} className={courseForm.mode === 'courses' ? 'text-accent-amber mt-0.5' : 'text-zinc-500 mt-0.5'} />
+                  <div className="min-w-0">
+                    <div className={`text-xs font-semibold ${courseForm.mode === 'courses' ? 'text-accent-amber' : 'text-zinc-300'}`}>Courses Mode</div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5 leading-snug">Sequential self-paced curriculum or roadmap</div>
+                  </div>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <label className="block text-xs text-txt-muted mb-1 font-medium">Course Title *</label>

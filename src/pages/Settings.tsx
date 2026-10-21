@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   User, Database, Palette, Download, Trash2,
   Check, RefreshCw, HardDrive, LogOut, Upload, AlertTriangle,
-  Users, Shield, Mail, GraduationCap, Square, Play
+  Users, Shield, Mail, GraduationCap, Square, Play, Loader2
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -26,7 +26,7 @@ export const Settings: React.FC = () => {
   const { notes } = useNotesStore();
   const { projects } = useProjectsStore();
   const { sessions, activity } = useSessionStore();
-  const { academicModeEnabled, stopAcademicMode, startAcademicMode } = useUIStore();
+  const { academicModeEnabled, stopAcademicMode, startAcademicMode, isUpdatingAcademicMode } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
 
@@ -962,7 +962,8 @@ export const Settings: React.FC = () => {
                     <Button
                       variant="danger"
                       size="sm"
-                      icon={<Square size={12} className="fill-current" />}
+                      disabled={isUpdatingAcademicMode}
+                      icon={isUpdatingAcademicMode ? <Loader2 size={12} className="animate-spin" /> : <Square size={12} className="fill-current" />}
                       onClick={async () => {
                         const res = await stopAcademicMode();
                         if (res.success) {
@@ -973,13 +974,14 @@ export const Settings: React.FC = () => {
                         }
                       }}
                     >
-                      Stop Academic Mode
+                      {isUpdatingAcademicMode ? 'Stopping...' : 'Stop Academic Mode'}
                     </Button>
                   ) : (
                     <Button
                       variant="primary"
                       size="sm"
-                      icon={<Play size={12} className="fill-current" />}
+                      disabled={isUpdatingAcademicMode}
+                      icon={isUpdatingAcademicMode ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} className="fill-current" />}
                       onClick={async () => {
                         const res = await startAcademicMode();
                         if (res.success) {
@@ -990,7 +992,7 @@ export const Settings: React.FC = () => {
                         }
                       }}
                     >
-                      Start Academic Mode
+                      {isUpdatingAcademicMode ? 'Starting...' : 'Start Academic Mode'}
                     </Button>
                   )}
                 </div>

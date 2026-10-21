@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  GraduationCap, Clock, CalendarClock, Compass, MapPin, Square,
+  GraduationCap, Clock, CalendarClock, Compass, MapPin, Square, Loader2,
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -53,6 +53,7 @@ export const AcademicHome: React.FC = () => {
   const activeCourses = getActiveCourses('academic');
   const { isAdmin } = useAuth();
   const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
+  const isUpdatingAcademicMode = useUIStore(s => s.isUpdatingAcademicMode);
 
   const now = new Date();
   const hour = now.getHours();
@@ -127,13 +128,16 @@ export const AcademicHome: React.FC = () => {
             <Button
               variant="danger"
               size="sm"
-              icon={<Square size={12} className="fill-current" />}
-              onClick={() => {
-                stopAcademicMode();
-                navigate('/');
+              disabled={isUpdatingAcademicMode}
+              icon={isUpdatingAcademicMode ? <Loader2 size={12} className="animate-spin" /> : <Square size={12} className="fill-current" />}
+              onClick={async () => {
+                const res = await stopAcademicMode();
+                if (res.success) {
+                  navigate('/');
+                }
               }}
             >
-              Stop Academic Mode
+              {isUpdatingAcademicMode ? 'Stopping...' : 'Stop Academic Mode'}
             </Button>
           )}
           <Button variant="tonal" size="sm" icon={<Compass size={14} />} onClick={() => navigate('/courses')}>

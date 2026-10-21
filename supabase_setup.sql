@@ -1245,6 +1245,21 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.set_academic_mode(BOOLEAN) TO authenticated, service_role;
 
+CREATE OR REPLACE FUNCTION public.get_academic_mode()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+  SELECT COALESCE(
+    (SELECT (value = 'true'::jsonb OR value = '"true"'::jsonb) FROM public.system_settings WHERE key = 'academic_mode_enabled'),
+    TRUE
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_academic_mode() TO authenticated, anon, service_role;
+
 DO $$
 BEGIN
   IF EXISTS (

@@ -3,7 +3,7 @@ import { NavLink, useLocation, useSearchParams, useNavigate } from 'react-router
 import {
   LayoutGrid, GitFork, BookOpen, FileEdit,
   FolderKanban, Activity, BarChart2, CalendarDays, CalendarClock,
-  Settings, ChevronLeft, X, GraduationCap, Route, Square, Play,
+  Settings, ChevronLeft, X, GraduationCap, Route, Square, Play, Loader2,
 } from 'lucide-react';
 import { useUIStore } from '../../store/uiStore';
 import { useAuth } from '../../hooks/useAuth';
@@ -94,6 +94,7 @@ export const Sidebar: React.FC = () => {
   const mode = useUIStore(s => s.mode);
   const setMode = useUIStore(s => s.setMode);
   const academicModeEnabled = useUIStore(s => s.academicModeEnabled);
+  const isUpdatingAcademicMode = useUIStore(s => s.isUpdatingAcademicMode);
   const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
   const startAcademicMode = useUIStore(s => s.startAcademicMode);
 
@@ -241,17 +242,22 @@ export const Sidebar: React.FC = () => {
               {isAdmin && mode === 'academic' && (
                 <button
                   type="button"
-                  onClick={() => {
-                    stopAcademicMode();
-                    if (['/timetable', '/deadlines', '/grades'].some(p => location.pathname.startsWith(p))) {
+                  disabled={isUpdatingAcademicMode}
+                  onClick={async () => {
+                    const res = await stopAcademicMode();
+                    if (res.success && ['/timetable', '/deadlines', '/grades'].some(p => location.pathname.startsWith(p))) {
                       navigate('/courses');
                     }
                   }}
                   title="Stop Academic Mode (Admin only)"
-                  className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition-all cursor-pointer shadow-sm group"
+                  className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition-all cursor-pointer shadow-sm group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Square size={10} className="fill-current text-rose-400 group-hover:scale-110 transition-transform" />
-                  {!collapsed && <span>Stop Academic Mode</span>}
+                  {isUpdatingAcademicMode ? (
+                    <Loader2 size={10} className="animate-spin text-rose-400" />
+                  ) : (
+                    <Square size={10} className="fill-current text-rose-400 group-hover:scale-110 transition-transform" />
+                  )}
+                  {!collapsed && <span>{isUpdatingAcademicMode ? 'Stopping...' : 'Stop Academic Mode'}</span>}
                 </button>
               )}
             </div>
@@ -268,12 +274,19 @@ export const Sidebar: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => startAcademicMode()}
+                  disabled={isUpdatingAcademicMode}
+                  onClick={async () => {
+                    await startAcademicMode();
+                  }}
                   title="Start Academic Mode (Admin)"
-                  className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-all cursor-pointer"
+                  className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Play size={10} className="fill-current" />
-                  {!collapsed && <span>Start Academic Mode</span>}
+                  {isUpdatingAcademicMode ? (
+                    <Loader2 size={10} className="animate-spin text-emerald-400" />
+                  ) : (
+                    <Play size={10} className="fill-current" />
+                  )}
+                  {!collapsed && <span>{isUpdatingAcademicMode ? 'Starting...' : 'Start Academic Mode'}</span>}
                 </button>
               </div>
             ) : null

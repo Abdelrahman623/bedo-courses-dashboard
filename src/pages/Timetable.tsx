@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  CalendarDays, Plus, MapPin, Pencil, Trash2, Compass, GraduationCap, Square,
+  CalendarDays, Plus, MapPin, Pencil, Trash2, Compass, GraduationCap, Square, Loader2,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -114,6 +114,7 @@ export const Timetable: React.FC = () => {
   const activeCourses = getActiveCourses('academic');
   const { isAdmin } = useAuth();
   const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
+  const isUpdatingAcademicMode = useUIStore(s => s.isUpdatingAcademicMode);
   const toneByCourse = useMemo(() => {
     const map = new Map<string, Tone>();
     activeCourses.forEach((c, i) => map.set(c.id, TONES[i % TONES.length]));
@@ -284,14 +285,17 @@ export const Timetable: React.FC = () => {
             <Button
               variant="danger"
               size="sm"
-              icon={<Square size={12} className="fill-current" />}
-              onClick={() => {
-                stopAcademicMode();
-                navigate('/courses');
+              disabled={isUpdatingAcademicMode}
+              icon={isUpdatingAcademicMode ? <Loader2 size={12} className="animate-spin" /> : <Square size={12} className="fill-current" />}
+              onClick={async () => {
+                const res = await stopAcademicMode();
+                if (res.success) {
+                  navigate('/courses');
+                }
               }}
               title="Stop Academic Mode (Admin)"
             >
-              Stop Academic Mode
+              {isUpdatingAcademicMode ? 'Stopping...' : 'Stop Academic Mode'}
             </Button>
           )}
           <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => openCreate()}>
