@@ -291,3 +291,54 @@ parser Vercel used. If the control bar is still missing after this fix,
 check the Vercel build log for any warning mentioning
 `RunnableCodeBlockView.tsx`, and check the browser console for a runtime
 error on that file — either would point at something else entirely.
+
+## Course roadmap isolation (unlinking shared presence/cursors)
+
+**Issue**: During project collaboration implementation, `RoadmapGraph` was
+erroneously given `usePresenceStore` hooks and passed `projectId` (`'shared_roadmap'`
+or `activeTemplateId`) from `Courses.tsx`, broadcasting mouse movements and rendering
+an SVG `CursorLayer`. This made personal course roadmaps appear shared across users.
+
+**Fix**:
+1. Removed `projectId`, presence channel joining, mousemove broadcasting, and `<CursorLayer />` from `RoadmapGraph.tsx`.
+2. Removed `projectId={...}` from `RoadmapGraph` in `Courses.tsx`.
+3. Deleted unused `CursorLayer.tsx` (`ProjectRoadmapView.tsx` uses its own DOM-based cursors for project collaboration). Course roadmaps are now strictly personal.
+
+## Notes linked to Project Milestones
+
+**Task**: Allow notes to link to project milestones directly.
+
+**Changes**:
+1. Added `milestone_id` to `Note` interface in `src/types/index.ts` and `supabase_migration_notes_milestones.sql` (also added to `supabase_setup.sql` & `supabase_sharing.sql`).
+2. Updated `src/store/notesStore.ts` (`normalizeNote`, `createNote`, `saveNote`) to recognize and persist `milestone_id`.
+3. Extended `src/store/milestonesStore.ts` with `fetchAllMilestones()` so all accessible project milestones are available to Notes without needing to navigate into each project first.
+4. Updated `src/pages/Notes.tsx`:
+   - Added `milestone` link type in both New Note and Link/Re-link modals, with grouped `<optgroup>` selection by project.
+   - Handled `/notes?project=<id>&milestone=<id>` and `&new=1` deep linking.
+   - Displayed `🎯 [Project] › [Milestone]` link badges on note cards and editor headers.
+5. Added note counter / quick-add buttons to each milestone card in both `ProjectRoadmapView.tsx` and `MilestonesPanel.tsx`, deep-linking directly to `/notes?project=...&milestone=...`.
+
+## Hierarchical Note Folders
+
+**Task**: Enable nested folders in the Notes page sidebar ("each folder has its notes and can hold another folder inside of it").
+
+**Schema & Database**:
+- Created `public.note_folders` table (`id`, `user_id`, `name`, `parent_id` self-referencing FK with `ON DELETE CASCADE`, `color`, `position`, timestamps) with RLS policies in `supabase_migration_note_folders.sql` and incorporated into `supabase_setup.sql`.
+- Added `folder_id` UUID column to `public.notes` referencing `note_folders(id)` with `ON DELETE SET NULL`.
+- Deleting a folder deletes nested subfolders, but **never deletes notes**; note records safely become `folder_id = null` (Unfiled).
+
+**State & Store**:
+- Updated `src/types/index.ts`: added `NoteFolder` interface and `folder_id?: string | null` on `Note`.
+- Updated `src/store/notesStore.ts`: added `folders`, `expandedFolderIds`, `fetchFolders`, `createFolder`, `updateFolder`, `deleteFolder`, `toggleFolderExpand`, `setFolderExpanded`, `moveNoteToFolder`.
+- Updated `src/lib/resetStores.ts` to clear folders on sign-out.
+
+**UI & Interaction (`src/pages/Notes.tsx`)**:
+- Sidebar dual action bar: `[ + New Note ]` and `[ 📁 Folder ]`.
+- Hierarchical recursive tree rendering for folders, nested subfolders (with guide lines and indentation), and notes inside folders.
+- Hover quick action buttons on folders: `+ Note` (pre-selects folder), `+ Subfolder`, `Rename`, `Delete`.
+- Separate expandable "Unfiled Notes" section below folders for notes without a folder.
+- Search mode displays flat list of matching notes annotated with breadcrumb folder paths (`📁 Path / To / Folder`).
+- Move note modal accessible from both note list item hover action and note editor header pill.
+- Cycle/recursion prevention (`isDescendant` check) when selecting parent folder during creation or renaming.
+- Folder color accent picker supporting multiple presets (Amber, Emerald, Blue, Purple, Rose, Cyan).
+

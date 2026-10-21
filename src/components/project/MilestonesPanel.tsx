@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, CheckSquare, Square, Flag, ChevronDown, ChevronUp, Loader2, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Trash2, CheckSquare, Square, Flag, ChevronDown, ChevronUp, Loader2, AlertCircle, FileText } from 'lucide-react';
 
 import { useMilestonesStore } from '../../store/milestonesStore';
+import { useNotesStore } from '../../store/notesStore';
 import type { ProjectMilestone } from '../../types';
 
 interface MilestonesPanelProps {
@@ -60,7 +62,8 @@ const MilestoneCard: React.FC<{
   canModify: boolean;
   projectId: string;
 }> = ({ milestone, canModify, projectId }) => {
-
+  const navigate = useNavigate();
+  const { notes } = useNotesStore();
   const { updateMilestone, deleteMilestone, addItem, toggleItem, deleteItem } = useMilestonesStore();
   const [expanded, setExpanded] = useState(true);
   const [newItemText, setNewItemText] = useState('');
@@ -134,6 +137,19 @@ const MilestoneCard: React.FC<{
               <Trash2 size={13} />
             </button>
           )}
+
+          {/* Milestone notes button */}
+          <button
+            onClick={() => {
+              const count = notes.filter(n => n.milestone_id === milestone.id).length;
+              navigate(count > 0 ? `/notes?project=${projectId}&milestone=${milestone.id}` : `/notes?project=${projectId}&milestone=${milestone.id}&new=1`);
+            }}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06] transition-colors cursor-pointer"
+            title={notes.filter(n => n.milestone_id === milestone.id).length > 0 ? `${notes.filter(n => n.milestone_id === milestone.id).length} linked note(s)` : 'Add note for this milestone'}
+          >
+            <FileText size={10} className={notes.filter(n => n.milestone_id === milestone.id).length > 0 ? 'text-accent-amber' : 'text-zinc-500'} />
+            <span>{notes.filter(n => n.milestone_id === milestone.id).length > 0 ? notes.filter(n => n.milestone_id === milestone.id).length : '+ Note'}</span>
+          </button>
 
           <button
             onClick={() => setExpanded(v => !v)}
@@ -232,6 +248,7 @@ const MilestoneCard: React.FC<{
 export const MilestonesPanel: React.FC<MilestonesPanelProps> = ({ projectId, isOwner = false, canEdit }) => {
   const canModify = canEdit !== undefined ? canEdit : isOwner;
   const { milestones, loading, fetchMilestones, addMilestone } = useMilestonesStore();
+  const { notes, fetchNotes } = useNotesStore();
   const [showForm, setShowForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDef, setNewDef] = useState('');
@@ -240,7 +257,10 @@ export const MilestonesPanel: React.FC<MilestonesPanelProps> = ({ projectId, isO
 
   const projectMilestones = milestones[projectId] ?? [];
 
-  useEffect(() => { fetchMilestones(projectId); }, [projectId, fetchMilestones]);
+  useEffect(() => {
+    fetchMilestones(projectId);
+    if (notes.length === 0) fetchNotes();
+  }, [projectId, fetchMilestones, notes.length, fetchNotes]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();

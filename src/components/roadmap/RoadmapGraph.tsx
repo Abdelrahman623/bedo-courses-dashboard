@@ -1,9 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { useRoadmapStore } from '../../store/roadmapStore';
-import { usePresenceStore } from '../../store/presenceStore';
-import { useAuth } from '../../hooks/useAuth';
-import { CursorLayer } from '../presence/CursorLayer';
 import type { RoadmapNode } from '../../types';
 import { SlideOver } from '../ui/SlideOver';
 import { Button } from '../ui/Button';
@@ -42,17 +39,13 @@ const getStatusBgColor = (status: RoadmapNode['status']) => {
 interface RoadmapGraphProps {
   onOpenAddModal?: () => void;
   onOpenTemplateModal?: () => void;
-  /** When provided, joins a Supabase Realtime presence channel for live cursors */
-  projectId?: string;
 }
 
-export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOpenTemplateModal, projectId }) => {
+export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOpenTemplateModal }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
   const { localNodes, localEdges, setLocalTopicStatus, deleteTopic, loadTemplate } = useRoadmapStore();
-  const { joinChannel, leaveChannel, broadcastCursor } = usePresenceStore();
   const [selected, setSelected] = useState<RoadmapNode | null>(null);
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -64,29 +57,6 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
   // Always-current snapshot of localNodes so D3 click closures never read stale status.
   const localNodesRef = useRef(localNodes);
   localNodesRef.current = localNodes;
-
-
-  // ── Presence: join / leave channel when projectId changes ────────────────
-  useEffect(() => {
-    if (!projectId || !user?.id) return;
-    const name = profile?.name || profile?.username || user.email?.split('@')[0] || 'User';
-    joinChannel(projectId, user.id, name);
-    return () => { leaveChannel(); };
-  }, [projectId, user?.id, profile?.name, profile?.username, user?.email, joinChannel, leaveChannel]);
-
-  // ── Cursor broadcast: mouse move over the SVG ────────────────────────────
-  const handleSvgMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    if (!projectId || !svgRef.current || !zoomRef.current) return;
-    // Get the current D3 zoom transform so we can convert screen → canvas space
-    const transform = d3.zoomTransform(svgRef.current);
-    const rect = svgRef.current.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    // Invert: canvas_coord = (screen_coord - translate) / scale
-    const canvasX = (screenX - transform.x) / transform.k;
-    const canvasY = (screenY - transform.y) / transform.k;
-    broadcastCursor(canvasX, canvasY);
-  }, [projectId, broadcastCursor]);
 
   useEffect(() => {
     const updateDims = () => {
@@ -724,12 +694,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
             width="100%"
             height="100%"
             style={{ background: 'transparent' }}
-            onMouseMove={handleSvgMouseMove}
           />
-
-          {/* Live cursor overlay for collaborators */}
-          <CursorLayer svgRef={svgRef} />
-
 
           {/* Floating Controls (Top Right): Layout Switcher + Zoom/Center */}
           <div className="absolute top-4 right-4 flex items-center gap-2 z-10">

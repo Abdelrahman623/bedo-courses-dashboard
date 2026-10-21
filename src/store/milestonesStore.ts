@@ -8,6 +8,7 @@ interface MilestonesState {
   loading: boolean;
 
   fetchMilestones: (projectId: string) => Promise<void>;
+  fetchAllMilestones: () => Promise<void>;
   addMilestone: (projectId: string, data: { title: string; definition?: string }) => Promise<{ error?: string }>;
   updateMilestone: (id: string, projectId: string, changes: Partial<Pick<ProjectMilestone, 'title' | 'definition'>>) => Promise<void>;
   deleteMilestone: (id: string, projectId: string) => Promise<void>;
@@ -74,6 +75,59 @@ export const useMilestonesStore = create<MilestonesState>((set, get) => ({
       }));
 
       set(s => ({ milestones: { ...s.milestones, [projectId]: milestones } }));
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  fetchAllMilestones: async () => {
+    if (!isSupabaseConfigured) return;
+    set({ loading: true });
+    try {
+      const { data: mData, error: mErr } = await supabase
+        .from('project_milestones')
+        .select('*')
+        .order('position', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (mErr) {
+        console.error('[MilestonesStore] fetchAllMilestones error:', mErr.code, mErr.message);
+        return;
+      }
+
+      const rawMilestones = (mData ?? []) as any[];
+      const milestoneIds = rawMilestones.map(m => m.id);
+
+      let items: MilestoneItem[] = [];
+      if (milestoneIds.length > 0) {
+        const { data: iData, error: iErr } = await supabase
+          .from('milestone_items')
+          .select('*')
+          .in('milestone_id', milestoneIds)
+          .order('position', { ascending: true })
+          .order('created_at', { ascending: true });
+
+        if (!iErr && iData) {
+          items = iData as MilestoneItem[];
+        }
+      }
+
+      const itemsByMilestone: Record<string, MilestoneItem[]> = {};
+      for (const item of items) {
+        if (!itemsByMilestone[item.milestone_id]) itemsByMilestone[item.milestone_id] = [];
+        itemsByMilestone[item.milestone_id].push(item);
+      }
+
+      const byProject: Record<string, ProjectMilestone[]> = {};
+      for (const m of rawMilestones) {
+        if (!byProject[m.project_id]) byProject[m.project_id] = [];
+        byProject[m.project_id].push({
+          ...m,
+          items: itemsByMilestone[m.id] ?? [],
+        });
+      }
+
+      set(s => ({ milestones: { ...s.milestones, ...byProject } }));
     } finally {
       set({ loading: false });
     }

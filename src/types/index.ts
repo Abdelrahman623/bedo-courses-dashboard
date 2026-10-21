@@ -130,12 +130,25 @@ export interface Topic {
 // ─── Note ────────────────────────────────────────────────────────────────────
 export type NoteType = 'general' | 'linked';
 
+export interface NoteFolder {
+  id: string;
+  user_id: string;
+  name: string;
+  parent_id?: string | null;
+  color?: string | null;
+  position?: number;
+  created_at: string;
+  updated_at?: string;
+}
+
 export interface Note {
   id: string;
   user_id: string;
+  folder_id?: string | null;
   course_id?: string;
   topic_id?: string;
   project_id?: string;
+  milestone_id?: string;
   note_type?: NoteType;
   title: string;
   content: string; // TipTap JSON string

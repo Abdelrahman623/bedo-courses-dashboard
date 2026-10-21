@@ -277,3 +277,8 @@ $$;
 
 grant execute on function public.claim_local_projects() to authenticated;
 
+-- ─── Link Notes to Milestones ───────────────────────────────────────────────
+alter table public.notes
+  add column if not exists milestone_id uuid references public.project_milestones(id) on delete set null;
+create index if not exists notes_milestone_id_idx on public.notes(milestone_id);
+

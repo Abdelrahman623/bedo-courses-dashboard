@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Flag, Plus, Trash2, CheckSquare, Square, Pencil, UserPlus,
-  ArrowLeft, ChevronRight, CheckCheck, AlertCircle, LogOut
+  ArrowLeft, ChevronRight, CheckCheck, AlertCircle, LogOut, FileText
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { ProgressRing } from '../ui/ProgressRing';
 import { useMilestonesStore } from '../../store/milestonesStore';
 import { useProjectsStore } from '../../store/projectsStore';
+import { useNotesStore } from '../../store/notesStore';
 import { usePresenceStore } from '../../store/presenceStore';
 import { useAuth } from '../../hooks/useAuth';
 import { ROLE_CONFIGS, getProjectRole, canInviteMembers, canManageMilestones, type ProjectRole } from '../../lib/projectRoles';
@@ -31,6 +33,8 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
   onOpenInvite,
 }) => {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
+  const { notes, fetchNotes } = useNotesStore();
   const {
     milestones,
     loading,
@@ -102,6 +106,11 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
   useEffect(() => {
     fetchMilestones(project.id);
   }, [project.id, fetchMilestones]);
+
+  // Ensure notes are fetched for milestone linking
+  useEffect(() => {
+    if (notes.length === 0) fetchNotes();
+  }, [notes.length, fetchNotes]);
 
   // Listen for real-time actions from other collaborators (e.g. checkbox toggles)
   useEffect(() => {
@@ -430,6 +439,19 @@ export const ProjectRoadmapView: React.FC<ProjectRoadmapViewProps> = ({
                         </span>
 
                         <div className="flex items-center gap-1">
+                          {/* Milestone notes button */}
+                          <button
+                            onClick={() => {
+                              const count = notes.filter(n => n.milestone_id === m.id).length;
+                              navigate(count > 0 ? `/notes?project=${project.id}&milestone=${m.id}` : `/notes?project=${project.id}&milestone=${m.id}&new=1`);
+                            }}
+                            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white border border-white/[0.06] transition-colors cursor-pointer"
+                            title={notes.filter(n => n.milestone_id === m.id).length > 0 ? `${notes.filter(n => n.milestone_id === m.id).length} linked note(s)` : 'Add a note for this milestone'}
+                          >
+                            <FileText size={10} className={notes.filter(n => n.milestone_id === m.id).length > 0 ? 'text-accent-amber' : 'text-zinc-500'} />
+                            <span>{notes.filter(n => n.milestone_id === m.id).length > 0 ? notes.filter(n => n.milestone_id === m.id).length : '+ Note'}</span>
+                          </button>
+
                           {isComplete && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
                               <CheckCheck size={11} /> Done

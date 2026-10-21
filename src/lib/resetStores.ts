@@ -40,6 +40,8 @@ export function resetAllStores(): void {
 
   useNotesStore.setState({
     notes: [],
+    folders: [],
+    expandedFolderIds: [],
     activeNote: null,
     searchQuery: '',
   });

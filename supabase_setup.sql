@@ -144,8 +144,9 @@ CREATE TABLE IF NOT EXISTS public.notes (
   user_id    TEXT NOT NULL DEFAULT 'local',
   course_id  UUID REFERENCES courses(id) ON DELETE SET NULL,
   topic_id   TEXT REFERENCES topics(id) ON DELETE SET NULL,
-  project_id UUID,
-  note_type  TEXT NOT NULL DEFAULT 'general'
+  project_id   UUID,
+  milestone_id UUID,
+  note_type    TEXT NOT NULL DEFAULT 'general'
                CHECK (note_type IN ('general','linked')),
   title      TEXT NOT NULL DEFAULT 'Untitled Note',
   content    TEXT NOT NULL DEFAULT '',
@@ -805,7 +806,387 @@ SELECT 'roadmaps', COUNT(*) FROM public.roadmaps r
 
 
 -- =============================================================================
---  SECTION 9 — ⚠️  DO THIS NOW: MAKE YOURSELF AN ADMIN
+-- SECTION 10 — ACADEMIC MODE (schedule, assessments, grades)
+-- =============================================================================
+
+ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'courses';
+ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'user';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'courses_mode_check' AND conrelid = 'public.courses'::regclass
+  ) THEN
+    ALTER TABLE public.courses ADD CONSTRAINT courses_mode_check
+      CHECK (mode IN ('academic', 'courses'));
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'courses_source_check' AND conrelid = 'public.courses'::regclass
+  ) THEN
+    ALTER TABLE public.courses ADD CONSTRAINT courses_source_check
+      CHECK (source IN ('seeded', 'user'));
+  END IF;
+END$$;
+
+CREATE INDEX IF NOT EXISTS courses_mode_idx ON public.courses (mode);
+
+CREATE TABLE IF NOT EXISTS public.schedule (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  course_id   UUID NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
+  day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  start_time  TIME NOT NULL,
+  end_time    TIME NOT NULL,
+  location    TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (end_time > start_time)
+);
+
+CREATE INDEX IF NOT EXISTS schedule_course_idx ON public.schedule (course_id);
+
+CREATE TABLE IF NOT EXISTS public.assessments (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  course_id  UUID NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
+  title      TEXT NOT NULL,
+  type       TEXT NOT NULL CHECK (type IN ('exam', 'assignment', 'quiz')),
+  due_date   DATE NOT NULL,
+  weight     NUMERIC NOT NULL DEFAULT 0 CHECK (weight >= 0 AND weight <= 1),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS assessments_course_idx ON public.assessments (course_id);
+CREATE INDEX IF NOT EXISTS assessments_due_date_idx ON public.assessments (due_date);
+
+CREATE TABLE IF NOT EXISTS public.grades (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  assessment_id UUID NOT NULL UNIQUE REFERENCES public.assessments(id) ON DELETE CASCADE,
+  score         NUMERIC NOT NULL,
+  max_score     NUMERIC NOT NULL CHECK (max_score > 0),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS grades_assessment_idx ON public.grades (assessment_id);
+
+ALTER TABLE public.schedule    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.assessments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.grades      ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS schedule_owner ON public.schedule;
+CREATE POLICY schedule_owner ON public.schedule
+  FOR ALL TO authenticated
+  USING (
+    public.is_admin()
+    OR EXISTS (
+      SELECT 1 FROM public.courses c
+      WHERE c.id = schedule.course_id AND c.user_id::text = auth.uid()::text
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.courses c
+      WHERE c.id = schedule.course_id AND c.user_id::text = auth.uid()::text
+    )
+  );
+
+DROP POLICY IF EXISTS assessments_owner ON public.assessments;
+CREATE POLICY assessments_owner ON public.assessments
+  FOR ALL TO authenticated
+  USING (
+    public.is_admin()
+    OR EXISTS (
+      SELECT 1 FROM public.courses c
+      WHERE c.id = assessments.course_id AND c.user_id::text = auth.uid()::text
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.courses c
+      WHERE c.id = assessments.course_id AND c.user_id::text = auth.uid()::text
+    )
+  );
+
+DROP POLICY IF EXISTS grades_owner ON public.grades;
+CREATE POLICY grades_owner ON public.grades
+  FOR ALL TO authenticated
+  USING (
+    public.is_admin()
+    OR EXISTS (
+      SELECT 1 FROM public.assessments a
+      JOIN public.courses c ON c.id = a.course_id
+      WHERE a.id = grades.assessment_id AND c.user_id::text = auth.uid()::text
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.assessments a
+      JOIN public.courses c ON c.id = a.course_id
+      WHERE a.id = grades.assessment_id AND c.user_id::text = auth.uid()::text
+    )
+  );
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.schedule TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.assessments TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.grades TO authenticated;
+
+
+-- =============================================================================
+-- SECTION 11 — PROJECT COLLABORATION, MILESTONES & LINKED NOTES
+-- =============================================================================
+
+DROP POLICY IF EXISTS "profiles_read_for_sharing" ON public.profiles;
+CREATE POLICY "profiles_read_for_sharing" ON public.profiles
+  FOR SELECT TO authenticated
+  USING (true);
+
+CREATE TABLE IF NOT EXISTS public.project_invites (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id  UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  inviter_id  UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  invitee_id  UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  status      TEXT NOT NULL DEFAULT 'pending'
+              CHECK (status IN ('pending','accepted','declined')),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (project_id, invitee_id)
+);
+
+ALTER TABLE public.project_invites ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "invite_owner_all" ON public.project_invites;
+CREATE POLICY "invite_owner_all" ON public.project_invites
+  FOR ALL TO authenticated
+  USING  (inviter_id = auth.uid())
+  WITH CHECK (inviter_id = auth.uid());
+
+DROP POLICY IF EXISTS "invite_invitee_select" ON public.project_invites;
+CREATE POLICY "invite_invitee_select" ON public.project_invites
+  FOR SELECT TO authenticated
+  USING (invitee_id = auth.uid());
+
+DROP POLICY IF EXISTS "invite_invitee_update" ON public.project_invites;
+CREATE POLICY "invite_invitee_update" ON public.project_invites
+  FOR UPDATE TO authenticated
+  USING (invitee_id = auth.uid())
+  WITH CHECK (status IN ('accepted', 'declined'));
+
+DROP POLICY IF EXISTS "invite_invitee_delete" ON public.project_invites;
+CREATE POLICY "invite_invitee_delete" ON public.project_invites
+  FOR DELETE TO authenticated
+  USING (invitee_id = auth.uid());
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'project_invites'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.project_invites;
+  END IF;
+END $$;
+
+DROP POLICY IF EXISTS "projects_owner_read" ON public.projects;
+CREATE POLICY "projects_owner_read" ON public.projects
+  FOR SELECT TO authenticated
+  USING (user_id::text = auth.uid()::text);
+
+DROP POLICY IF EXISTS "projects_shared_read" ON public.projects;
+CREATE POLICY "projects_shared_read" ON public.projects
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.project_invites pi
+      WHERE pi.project_id = projects.id
+        AND pi.invitee_id = auth.uid()
+        AND pi.status = 'accepted'
+    )
+  );
+
+CREATE TABLE IF NOT EXISTS public.project_milestones (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id  UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  definition  TEXT,
+  position    INT NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.project_milestones ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "milestone_read" ON public.project_milestones;
+CREATE POLICY "milestone_read" ON public.project_milestones
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.projects p
+      WHERE p.id = project_milestones.project_id
+        AND p.user_id::text = auth.uid()::text
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.project_invites pi
+      WHERE pi.project_id = project_milestones.project_id
+        AND pi.invitee_id = auth.uid()
+        AND pi.status = 'accepted'
+    )
+  );
+
+DROP POLICY IF EXISTS "milestone_owner_write" ON public.project_milestones;
+CREATE POLICY "milestone_owner_write" ON public.project_milestones
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.projects p
+      WHERE p.id = project_milestones.project_id
+        AND p.user_id::text = auth.uid()::text
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.projects p
+      WHERE p.id = project_milestones.project_id
+        AND p.user_id::text = auth.uid()::text
+    )
+  );
+
+CREATE TABLE IF NOT EXISTS public.milestone_items (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  milestone_id UUID NOT NULL REFERENCES public.project_milestones(id) ON DELETE CASCADE,
+  text         TEXT NOT NULL,
+  done         BOOLEAN NOT NULL DEFAULT false,
+  position     INT NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.milestone_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "item_read" ON public.milestone_items;
+CREATE POLICY "item_read" ON public.milestone_items
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.project_milestones pm
+        JOIN public.projects p ON p.id = pm.project_id
+      WHERE pm.id = milestone_items.milestone_id
+        AND (
+          p.user_id::text = auth.uid()::text
+          OR EXISTS (
+            SELECT 1 FROM public.project_invites pi
+            WHERE pi.project_id = p.id
+              AND pi.invitee_id = auth.uid()
+              AND pi.status = 'accepted'
+          )
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS "item_owner_write" ON public.milestone_items;
+CREATE POLICY "item_owner_write" ON public.milestone_items
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.project_milestones pm
+        JOIN public.projects p ON p.id = pm.project_id
+      WHERE pm.id = milestone_items.milestone_id
+        AND p.user_id::text = auth.uid()::text
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.project_milestones pm
+        JOIN public.projects p ON p.id = pm.project_id
+      WHERE pm.id = milestone_items.milestone_id
+        AND p.user_id::text = auth.uid()::text
+    )
+  );
+
+DROP POLICY IF EXISTS "item_collaborator_toggle" ON public.milestone_items;
+CREATE POLICY "item_collaborator_toggle" ON public.milestone_items
+  FOR UPDATE TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.project_milestones pm
+        JOIN public.projects p ON p.id = pm.project_id
+      WHERE pm.id = milestone_items.milestone_id
+        AND (
+          p.user_id::text = auth.uid()::text
+          OR EXISTS (
+            SELECT 1 FROM public.project_invites pi
+            WHERE pi.project_id = p.id
+              AND pi.invitee_id = auth.uid()
+              AND pi.status = 'accepted'
+          )
+        )
+    )
+  )
+  WITH CHECK (true);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'project_milestones'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.project_milestones;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'milestone_items'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.milestone_items;
+  END IF;
+END $$;
+
+-- Link notes to project milestones
+ALTER TABLE public.notes
+  ADD COLUMN IF NOT EXISTS milestone_id UUID REFERENCES public.project_milestones(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS notes_milestone_id_idx ON public.notes(milestone_id);
+
+-- Note folders (nested hierarchical folders)
+CREATE TABLE IF NOT EXISTS public.note_folders (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  parent_id  UUID REFERENCES public.note_folders(id) ON DELETE CASCADE,
+  color      TEXT,
+  position   INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS note_folders_user_idx ON public.note_folders(user_id);
+CREATE INDEX IF NOT EXISTS note_folders_parent_idx ON public.note_folders(parent_id);
+
+ALTER TABLE public.notes
+  ADD COLUMN IF NOT EXISTS folder_id UUID REFERENCES public.note_folders(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS notes_folder_id_idx ON public.notes(folder_id);
+
+ALTER TABLE public.note_folders ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS note_folders_owner ON public.note_folders;
+CREATE POLICY note_folders_owner ON public.note_folders
+  FOR ALL TO authenticated
+  USING (user_id::text = auth.uid()::text OR public.is_admin())
+  WITH CHECK (user_id::text = auth.uid()::text);
+
+GRANT USAGE ON SCHEMA public TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.note_folders TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.projects TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.project_milestones TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.milestone_items TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.project_invites TO authenticated, service_role;
+
+
+-- =============================================================================
+--  SECTION 12 — ⚠️  DO THIS: MAKE YOURSELF AN ADMIN
 -- =============================================================================
 --  Everyone defaults to is_admin = FALSE, including you. Uncomment ONE line
 --  below, put in your own email (the one you sign into the app with), and

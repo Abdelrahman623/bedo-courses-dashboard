@@ -10,7 +10,8 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, Tag, Trash2, FileText,
   Bold, Italic, Code, List, CheckSquare, Link2,
-  Check, X, ArrowLeft,
+  Check, X, ArrowLeft, Folder, FolderPlus, FolderOpen,
+  FolderInput, ChevronRight, ChevronDown, Pencil,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
@@ -18,8 +19,9 @@ import { RunnableCodeBlock } from '../components/notes/runnableCodeBlock';
 import { useNotesStore } from '../store/notesStore';
 import { useRoadmapStore } from '../store/roadmapStore';
 import { useProjectsStore } from '../store/projectsStore';
+import { useMilestonesStore } from '../store/milestonesStore';
 import { formatDate } from '../lib/utils';
-import type { Note, NoteType } from '../types';
+import type { Note, NoteFolder, NoteType } from '../types';
 
 // ─── Toolbar button helper ──────────────────────────────────────────────────
 interface ToolbarBtnProps {
@@ -44,10 +46,22 @@ const ToolbarBtn: React.FC<ToolbarBtnProps> = ({ active, onClick, title, childre
   </button>
 );
 
+// ─── Color presets for folders ──────────────────────────────────────────────
+const FOLDER_COLORS = [
+  { name: 'Amber', hex: '#F0A500' },
+  { name: 'Emerald', hex: '#00C896' },
+  { name: 'Blue', hex: '#3B82F6' },
+  { name: 'Purple', hex: '#A855F7' },
+  { name: 'Rose', hex: '#FF6B6B' },
+  { name: 'Cyan', hex: '#06B6D4' },
+];
+
 // ─── Notes Page ─────────────────────────────────────────────────────────────
 const Notes: React.FC = () => {
   const {
     notes,
+    folders,
+    expandedFolderIds,
     activeNote,
     loading,
     searchQuery,
@@ -57,21 +71,45 @@ const Notes: React.FC = () => {
     saveNote,
     deleteNote,
     setSearchQuery,
+    createFolder,
+    updateFolder,
+    deleteFolder,
+    toggleFolderExpand,
+    setFolderExpanded,
+    moveNoteToFolder,
   } = useNotesStore();
 
   const { courses, topics, localNodes } = useRoadmapStore();
   const { projects } = useProjectsStore();
+  const { milestones, fetchAllMilestones } = useMilestonesStore();
 
-  // Deep link from the Projects page: /notes?project=<id> scopes the list to
-  // one project, and &new=1 opens the composer already linked to it.
+  // Flattened project milestones for lookup
+  const allProjectMilestones = useMemo(() => {
+    return Object.entries(milestones).flatMap(([projId, list]) => {
+      const proj = projects.find(p => p.id === projId);
+      return list.map(m => ({
+        ...m,
+        projectTitle: proj?.title || 'Unknown Project',
+      }));
+    });
+  }, [milestones, projects]);
+
+  // Deep links from Projects: /notes?project=<id> or /notes?project=<id>&milestone=<id>
+  // &new=1 opens composer pre-linked
   const [searchParams, setSearchParams] = useSearchParams();
   const projectFilterId = searchParams.get('project');
+  const milestoneFilterId = searchParams.get('milestone');
   const filterProject = projectFilterId
     ? projects.find(p => p.id === projectFilterId) ?? null
     : null;
-  const clearProjectFilter = useCallback(() => {
+  const filterMilestone = milestoneFilterId
+    ? allProjectMilestones.find(m => m.id === milestoneFilterId) ?? null
+    : null;
+
+  const clearFilter = useCallback(() => {
     const next = new URLSearchParams(searchParams);
     next.delete('project');
+    next.delete('milestone');
     next.delete('new');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
@@ -86,20 +124,46 @@ const Notes: React.FC = () => {
   const [showNewModal, setShowNewModal] = useState(false);
   const [newNoteTitle, setNewNoteTitle] = useState('');
   const [newNoteType, setNewNoteType] = useState<NoteType>('general');
-  const [newNoteLinkType, setNewNoteLinkType] = useState<'course' | 'topic' | 'project'>('course');
+  const [newNoteLinkType, setNewNoteLinkType] = useState<'course' | 'topic' | 'project' | 'milestone'>('course');
   const [newNoteLinkedId, setNewNoteLinkedId] = useState<string>('');
+  const [newNoteProjectId, setNewNoteProjectId] = useState<string>('');
+  const [newNoteFolderId, setNewNoteFolderId] = useState<string | null>(null);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [createNoteError, setCreateNoteError] = useState<string | null>(null);
 
   // Edit / Link Active Note Modal State
   const [showLinkModal, setShowLinkModal] = useState(false);
-  const [editLinkType, setEditLinkType] = useState<'course' | 'topic' | 'project'>('course');
+  const [editLinkType, setEditLinkType] = useState<'course' | 'topic' | 'project' | 'milestone'>('course');
   const [editLinkedId, setEditLinkedId] = useState<string>('');
+  const [editProjectId, setEditProjectId] = useState<string>('');
 
-  // Fetch notes on mount
+  // Folder Modals State
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [folderModalMode, setFolderModalMode] = useState<'create' | 'edit'>('create');
+  const [folderModalParentId, setFolderModalParentId] = useState<string | null>(null);
+  const [folderModalTargetId, setFolderModalTargetId] = useState<string | null>(null);
+  const [folderNameInput, setFolderNameInput] = useState('');
+  const [folderColorInput, setFolderColorInput] = useState('');
+  const [folderError, setFolderError] = useState<string | null>(null);
+  const [isSavingFolder, setIsSavingFolder] = useState(false);
+
+  // Delete Folder Modal
+  const [deleteFolderModal, setDeleteFolderModal] = useState<NoteFolder | null>(null);
+  const [isDeletingFolder, setIsDeletingFolder] = useState(false);
+
+  // Move Note Modal
+  const [moveNoteModal, setMoveNoteModal] = useState<Note | null>(null);
+  const [targetMoveFolderId, setTargetMoveFolderId] = useState<string | null>(null);
+  const [isMovingNote, setIsMovingNote] = useState(false);
+
+  // Unfiled notes collapsed state
+  const [unfiledExpanded, setUnfiledExpanded] = useState(true);
+
+  // Fetch notes and project milestones on mount
   useEffect(() => {
     fetchNotes();
-  }, [fetchNotes]);
+    fetchAllMilestones();
+  }, [fetchNotes, fetchAllMilestones]);
 
   // All roadmap topics for topic linking
   const allMilestones = useMemo(() => {
@@ -117,6 +181,12 @@ const Notes: React.FC = () => {
 
   // Resolves link info for any note
   const getNoteLinkInfo = useCallback((note: Note) => {
+    if (note.milestone_id) {
+      const m = allProjectMilestones.find(item => item.id === note.milestone_id);
+      const p = projects.find(item => item.id === (note.project_id || m?.project_id));
+      const label = m ? `${p?.title ? p.title + ' › ' : ''}${m.title}` : 'Linked Milestone';
+      return { type: 'milestone' as const, label, icon: '🎯' };
+    }
     if (note.course_id) {
       const c = courses.find(item => item.id === note.course_id);
       return { type: 'course' as const, label: c?.title || 'Linked Course', icon: '📚' };
@@ -130,7 +200,7 @@ const Notes: React.FC = () => {
       return { type: 'project' as const, label: p?.title || 'Linked Project', icon: '💼' };
     }
     return null;
-  }, [courses, allMilestones, projects]);
+  }, [courses, allMilestones, projects, allProjectMilestones]);
 
   // Active note's link info
   const activeLinkInfo = useMemo(() => {
@@ -138,10 +208,61 @@ const Notes: React.FC = () => {
     return getNoteLinkInfo(activeNote);
   }, [activeNote, getNoteLinkInfo]);
 
+  // Folder helper functions
+  const getFolderPath = useCallback((folderId: string | null | undefined): string => {
+    if (!folderId) return '';
+    const parts: string[] = [];
+    let cur: NoteFolder | undefined = folders.find(f => f.id === folderId);
+    let guard = 0;
+    while (cur && guard < 20) {
+      guard++;
+      parts.unshift(cur.name);
+      const parentId: string | null | undefined = cur.parent_id;
+      cur = parentId ? folders.find(f => f.id === parentId) : undefined;
+    }
+    return parts.join(' / ');
+  }, [folders]);
+
+  // Helper to check if folderA is descendant of folderB (prevent cycles)
+  const isDescendant = useCallback((candidateId: string, possibleAncestorId: string): boolean => {
+    let cur: NoteFolder | undefined = folders.find(f => f.id === candidateId);
+    let guard = 0;
+    while (cur && cur.parent_id && guard < 20) {
+      guard++;
+      if (cur.parent_id === possibleAncestorId) return true;
+      const parentId: string | null | undefined = cur.parent_id;
+      cur = parentId ? folders.find(f => f.id === parentId) : undefined;
+    }
+    return false;
+  }, [folders]);
+
+  // Flat list of folders with indent level for dropdowns
+  const folderOptions = useMemo(() => {
+    const list: { id: string; name: string; level: number; path: string }[] = [];
+    const walk = (parentId: string | null, level: number) => {
+      const children = folders.filter(f => (f.parent_id || null) === parentId);
+      children.sort((a, b) => a.name.localeCompare(b.name));
+      for (const child of children) {
+        // Exclude target and its descendants when editing
+        if (folderModalTargetId && (child.id === folderModalTargetId || isDescendant(child.id, folderModalTargetId))) {
+          continue;
+        }
+        list.push({
+          id: child.id,
+          name: child.name,
+          level,
+          path: getFolderPath(child.id),
+        });
+        walk(child.id, level + 1);
+      }
+    };
+    walk(null, 0);
+    return list;
+  }, [folders, folderModalTargetId, isDescendant, getFolderPath]);
+
   // ── Editor ──────────────────────────────────────────────────────────────
   const editor = useEditor({
     extensions: [
-      // StarterKit's plain code block is swapped for the runnable one below.
       StarterKit.configure({ codeBlock: false }),
       RunnableCodeBlock,
       Placeholder.configure({ placeholder: 'Start writing...' }),
@@ -170,7 +291,6 @@ const Notes: React.FC = () => {
     } catch {
       parsed = activeNote.content || '';
     }
-    // Avoid re-setting if content is the same (prevents cursor jump)
     const current = JSON.stringify(editor.getJSON());
     if (current !== activeNote.content) {
       editor.commands.setContent(parsed as Parameters<typeof editor.commands.setContent>[0]);
@@ -179,39 +299,83 @@ const Notes: React.FC = () => {
   }, [activeNote?.id, editor]);
 
   // ── Filtered notes list ─────────────────────────────────────────────────
-  const isNoteLinked = (n: Note) => n.note_type === 'linked' || Boolean(n.course_id || n.topic_id || n.project_id);
+  const isNoteLinked = (n: Note) =>
+    n.note_type === 'linked' ||
+    Boolean(n.course_id || n.topic_id || n.project_id || n.milestone_id);
 
   const linkedCount = notes.filter(isNoteLinked).length;
   const generalCount = notes.length - linkedCount;
 
-  const filtered = notes.filter((n) => {
-    const q = searchQuery.toLowerCase();
-    const matchesSearch = (
-      n.title.toLowerCase().includes(q) ||
-      n.tags.some((t) => t.toLowerCase().includes(q))
-    );
-    const linked = isNoteLinked(n);
-    const matchesType = noteTypeFilter === 'all'
-      || (noteTypeFilter === 'general' && !linked)
-      || (noteTypeFilter === 'linked' && linked);
-    const matchesProject = !projectFilterId || n.project_id === projectFilterId;
-    return matchesSearch && matchesType && matchesProject;
-  });
+  const filteredNotes = useMemo(() => {
+    return notes.filter((n) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = !q || (
+        n.title.toLowerCase().includes(q) ||
+        n.tags.some((t) => t.toLowerCase().includes(q))
+      );
+      const linked = isNoteLinked(n);
+      const matchesType = noteTypeFilter === 'all'
+        || (noteTypeFilter === 'general' && !linked)
+        || (noteTypeFilter === 'linked' && linked);
+      const matchesProject = !projectFilterId || n.project_id === projectFilterId;
+      const matchesMilestone = !milestoneFilterId || n.milestone_id === milestoneFilterId;
+      return matchesSearch && matchesType && matchesProject && matchesMilestone;
+    });
+  }, [notes, searchQuery, noteTypeFilter, projectFilterId, milestoneFilterId]);
+
+  // Notes organized into folders & unfiled
+  const notesByFolderId = useMemo(() => {
+    const map = new Map<string, Note[]>();
+    for (const note of filteredNotes) {
+      if (note.folder_id) {
+        const list = map.get(note.folder_id) || [];
+        list.push(note);
+        map.set(note.folder_id, list);
+      }
+    }
+    return map;
+  }, [filteredNotes]);
+
+  const unfiledNotes = useMemo(() => {
+    return filteredNotes.filter(n => !n.folder_id);
+  }, [filteredNotes]);
+
+  // Total note count for a folder (including recursive subfolder notes)
+  const getFolderTotalNoteCount = useCallback((folderId: string): number => {
+    let count = notesByFolderId.get(folderId)?.length || 0;
+    const subfolders = folders.filter(f => f.parent_id === folderId);
+    for (const sub of subfolders) {
+      count += getFolderTotalNoteCount(sub.id);
+    }
+    return count;
+  }, [notesByFolderId, folders]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
-  const handleNewNote = useCallback(() => {
+  const handleNewNote = useCallback((folderId?: string | null) => {
     setNewNoteTitle('');
-    // Arriving from a project card, the obvious note to write is one attached
-    // to that project — so the composer opens pre-linked instead of blank.
-    setNewNoteType(projectFilterId ? 'linked' : 'general');
-    setNewNoteLinkType(projectFilterId ? 'project' : 'course');
-    setNewNoteLinkedId(projectFilterId ?? '');
+    setNewNoteFolderId(folderId !== undefined ? folderId : null);
+    if (milestoneFilterId) {
+      setNewNoteType('linked');
+      setNewNoteLinkType('milestone');
+      setNewNoteLinkedId(milestoneFilterId);
+      const found = allProjectMilestones.find(m => m.id === milestoneFilterId);
+      setNewNoteProjectId(projectFilterId || found?.project_id || '');
+    } else if (projectFilterId) {
+      setNewNoteType('linked');
+      setNewNoteLinkType('project');
+      setNewNoteLinkedId(projectFilterId);
+      setNewNoteProjectId('');
+    } else {
+      setNewNoteType('general');
+      setNewNoteLinkType('course');
+      setNewNoteLinkedId('');
+      setNewNoteProjectId('');
+    }
     setCreateNoteError(null);
     setShowNewModal(true);
-  }, [projectFilterId]);
+  }, [projectFilterId, milestoneFilterId, allProjectMilestones]);
 
-  // ?new=1 (sent by a project with no notes yet) opens the composer once, then
-  // drops the flag so a refresh doesn't reopen it.
+  // ?new=1 opens the composer once, then drops the flag
   useEffect(() => {
     if (searchParams.get('new') !== '1') return;
     handleNewNote();
@@ -220,53 +384,68 @@ const Notes: React.FC = () => {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams, handleNewNote]);
 
-  // While the list is scoped to a project, the note open in the editor has to
-  // belong to that project — otherwise the sidebar and the editor disagree.
+  // While the list is scoped to a milestone or project, sync the editor note
   useEffect(() => {
-    if (!projectFilterId) return;
-    if (activeNote?.project_id === projectFilterId) return;
-    const target = notes.find(n => n.project_id === projectFilterId) ?? null;
-    if (target?.id !== activeNote?.id) setActiveNote(target);
-  }, [projectFilterId, notes, activeNote, setActiveNote]);
+    if (milestoneFilterId) {
+      if (activeNote?.milestone_id === milestoneFilterId) return;
+      const target = notes.find(n => n.milestone_id === milestoneFilterId) ?? null;
+      if (target?.id !== activeNote?.id) setActiveNote(target);
+      return;
+    }
+    if (projectFilterId) {
+      if (activeNote?.project_id === projectFilterId) return;
+      const target = notes.find(n => n.project_id === projectFilterId) ?? null;
+      if (target?.id !== activeNote?.id) setActiveNote(target);
+    }
+  }, [projectFilterId, milestoneFilterId, notes, activeNote, setActiveNote]);
 
   const handleCreateNote = useCallback(async () => {
-    // Guards against a fast double-click firing two inserts before the first
-    // one resolves, which used to create two identical notes.
     if (isCreatingNote) return;
 
     const isLinked = newNoteType === 'linked' && Boolean(newNoteLinkedId);
     setIsCreatingNote(true);
     setCreateNoteError(null);
 
+    const targetProjectId =
+      newNoteLinkType === 'project' && isLinked
+        ? newNoteLinkedId
+        : newNoteLinkType === 'milestone' && isLinked
+        ? (newNoteProjectId || allProjectMilestones.find(m => m.id === newNoteLinkedId)?.project_id)
+        : undefined;
+
     const created = await createNote({
       title: newNoteTitle.trim() || 'Untitled Note',
       content: '',
       tags: [],
+      folder_id: newNoteFolderId || null,
       note_type: isLinked ? 'linked' : 'general',
       course_id: newNoteLinkType === 'course' && isLinked ? newNoteLinkedId : undefined,
       topic_id: newNoteLinkType === 'topic' && isLinked ? newNoteLinkedId : undefined,
-      project_id: newNoteLinkType === 'project' && isLinked ? newNoteLinkedId : undefined,
+      project_id: targetProjectId,
+      milestone_id: newNoteLinkType === 'milestone' && isLinked ? newNoteLinkedId : undefined,
     });
 
     setIsCreatingNote(false);
 
-    // createNote returns null when the save to the account failed — the
-    // store already rolled its own state back, so the only thing left is to
-    // tell the person rather than silently closing as if it worked.
     if (!created) {
       setCreateNoteError('Could not save the note. Check your connection and try again.');
       return;
     }
 
+    if (newNoteFolderId) {
+      setFolderExpanded(newNoteFolderId, true);
+    }
+
     setShowNewModal(false);
     setNewNoteTitle('');
     setNewNoteLinkedId('');
+    setNewNoteProjectId('');
+    setNewNoteFolderId(null);
 
-    // If created a linked note while on General filter, switch to 'linked' so it's visible immediately!
     if (isLinked && noteTypeFilter === 'general') {
       setNoteTypeFilter('linked');
     }
-  }, [createNote, isCreatingNote, newNoteType, newNoteLinkedId, newNoteLinkType, newNoteTitle, noteTypeFilter]);
+  }, [createNote, isCreatingNote, newNoteType, newNoteLinkedId, newNoteLinkType, newNoteProjectId, newNoteTitle, newNoteFolderId, noteTypeFilter, allProjectMilestones, setFolderExpanded]);
 
   const handleApplyEditLink = (action: 'link' | 'unlink') => {
     if (!activeNote) return;
@@ -276,13 +455,22 @@ const Notes: React.FC = () => {
         course_id: undefined,
         topic_id: undefined,
         project_id: undefined,
+        milestone_id: undefined,
       });
     } else {
+      const targetProjectId =
+        editLinkType === 'project'
+          ? editLinkedId
+          : editLinkType === 'milestone'
+          ? (editProjectId || allProjectMilestones.find(m => m.id === editLinkedId)?.project_id)
+          : undefined;
+
       saveNote(activeNote.id, {
         note_type: 'linked',
         course_id: editLinkType === 'course' ? editLinkedId : undefined,
         topic_id: editLinkType === 'topic' ? editLinkedId : undefined,
-        project_id: editLinkType === 'project' ? editLinkedId : undefined,
+        project_id: targetProjectId,
+        milestone_id: editLinkType === 'milestone' ? editLinkedId : undefined,
       });
       if (noteTypeFilter === 'general') {
         setNoteTypeFilter('all');
@@ -321,6 +509,294 @@ const Notes: React.FC = () => {
     setDeleteModal(null);
   };
 
+  // Folder modal handlers
+  const handleOpenCreateFolder = (parentId: string | null = null) => {
+    setFolderModalMode('create');
+    setFolderModalParentId(parentId);
+    setFolderModalTargetId(null);
+    setFolderNameInput('');
+    setFolderColorInput('');
+    setFolderError(null);
+    setShowFolderModal(true);
+  };
+
+  const handleOpenEditFolder = (folder: NoteFolder) => {
+    setFolderModalMode('edit');
+    setFolderModalParentId(folder.parent_id || null);
+    setFolderModalTargetId(folder.id);
+    setFolderNameInput(folder.name);
+    setFolderColorInput(folder.color || '');
+    setFolderError(null);
+    setShowFolderModal(true);
+  };
+
+  const handleSaveFolder = async () => {
+    const trimmed = folderNameInput.trim();
+    if (!trimmed) {
+      setFolderError('Folder name cannot be empty.');
+      return;
+    }
+    setIsSavingFolder(true);
+    setFolderError(null);
+    try {
+      if (folderModalMode === 'create') {
+        const created = await createFolder(trimmed, folderModalParentId, folderColorInput || undefined);
+        if (!created) {
+          setFolderError('Failed to create folder. Please try again.');
+          setIsSavingFolder(false);
+          return;
+        }
+        if (folderModalParentId) {
+          setFolderExpanded(folderModalParentId, true);
+        }
+      } else if (folderModalTargetId) {
+        await updateFolder(folderModalTargetId, {
+          name: trimmed,
+          parent_id: folderModalParentId,
+          color: folderColorInput || null,
+        });
+      }
+      setShowFolderModal(false);
+    } catch {
+      setFolderError('An unexpected error occurred.');
+    } finally {
+      setIsSavingFolder(false);
+    }
+  };
+
+  const handleDeleteFolderConfirm = async () => {
+    if (!deleteFolderModal) return;
+    setIsDeletingFolder(true);
+    try {
+      await deleteFolder(deleteFolderModal.id);
+      setDeleteFolderModal(null);
+    } finally {
+      setIsDeletingFolder(false);
+    }
+  };
+
+  const handleMoveNoteConfirm = async () => {
+    if (!moveNoteModal) return;
+    setIsMovingNote(true);
+    try {
+      await moveNoteToFolder(moveNoteModal.id, targetMoveFolderId);
+      if (targetMoveFolderId) {
+        setFolderExpanded(targetMoveFolderId, true);
+      }
+      setMoveNoteModal(null);
+    } finally {
+      setIsMovingNote(false);
+    }
+  };
+
+  // ── Tree rendering helper ────────────────────────────────────────────────
+  const renderNoteCard = (note: Note, indentClass = '') => {
+    const isActive = activeNote?.id === note.id;
+    const link = getNoteLinkInfo(note);
+    return (
+      <div
+        key={note.id}
+        onClick={() => setActiveNote(note)}
+        className={[
+          'group relative px-2.5 py-2 cursor-pointer transition-colors rounded-lg mb-0.5',
+          indentClass,
+          isActive
+            ? 'bg-accent-amber/15 border-l-2 border-accent-amber text-txt-primary shadow-[inset_0_0_15px_rgba(240,165,0,0.06)]'
+            : 'border-l-2 border-transparent hover:bg-white/[0.035] text-zinc-300'
+        ].join(' ')}
+      >
+        <div className="flex items-start justify-between gap-1">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <FileText size={12} className={isActive ? 'text-accent-amber flex-shrink-0' : 'text-zinc-500 group-hover:text-zinc-300 flex-shrink-0'} />
+              <p className={[
+                'text-xs font-medium truncate',
+                isActive ? 'text-accent-amber font-semibold' : 'text-zinc-200 group-hover:text-white',
+              ].join(' ')}>
+                {note.title || 'Untitled'}
+              </p>
+            </div>
+
+            {/* Folder path badge when searching */}
+            {searchQuery.trim() && note.folder_id && (
+              <div className="flex items-center gap-1 mt-0.5 text-[9px] text-zinc-400 font-mono truncate">
+                <Folder size={10} className="text-accent-amber/70" />
+                <span className="truncate">{getFolderPath(note.folder_id)}</span>
+              </div>
+            )}
+
+            {/* Linked Badge */}
+            {link && (
+              <div className="flex items-center gap-1 mt-0.5 text-[10px] text-accent-amber/90 font-medium truncate">
+                <span>{link.icon}</span>
+                <span className="truncate">{link.label}</span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[9px] text-txt-muted">
+                {formatDate(note.updated_at)}
+              </span>
+              {note.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {note.tags.slice(0, 2).map((t) => (
+                    <span
+                      key={t}
+                      className="text-[8px] px-1 py-0.2 rounded bg-accent-amber/10 text-accent-amber"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setMoveNoteModal(note);
+                setTargetMoveFolderId(note.folder_id || null);
+              }}
+              title="Move note to folder"
+              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/[0.08]"
+            >
+              <FolderInput size={11} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteModal(note.id);
+              }}
+              title="Delete note"
+              className="p-1 rounded text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"
+            >
+              <Trash2 size={11} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Recursive folder node renderer
+  const renderFolderNode = (folder: NoteFolder, depth = 0) => {
+    const isExpanded = expandedFolderIds.includes(folder.id);
+    const childFolders = folders.filter(f => f.parent_id === folder.id);
+    childFolders.sort((a, b) => a.name.localeCompare(b.name));
+    const folderNotes = notesByFolderId.get(folder.id) || [];
+    const totalCount = getFolderTotalNoteCount(folder.id);
+
+    const folderColor = folder.color || '#F0A500';
+
+    return (
+      <div key={folder.id} className="select-none mb-0.5">
+        {/* Folder header row */}
+        <div
+          onClick={() => toggleFolderExpand(folder.id)}
+          className="group flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer hover:bg-white/[0.04] transition-colors"
+          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        >
+          <div className="flex items-center gap-1.5 min-w-0 flex-1 mr-1">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFolderExpand(folder.id);
+              }}
+              className="text-zinc-500 hover:text-zinc-200 transition-colors flex-shrink-0"
+            >
+              {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            </button>
+
+            {isExpanded ? (
+              <FolderOpen size={14} style={{ color: folderColor }} className="flex-shrink-0" />
+            ) : (
+              <Folder size={14} style={{ color: folderColor }} className="flex-shrink-0" />
+            )}
+
+            <span className="font-medium text-zinc-300 group-hover:text-white truncate">
+              {folder.name}
+            </span>
+
+            <span className="text-[10px] text-zinc-500 font-mono flex-shrink-0">
+              ({totalCount})
+            </span>
+          </div>
+
+          {/* Quick action buttons on hover */}
+          <div
+            className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => handleNewNote(folder.id)}
+              title="Add note in this folder"
+              className="p-1 rounded text-zinc-400 hover:text-accent-amber hover:bg-white/[0.06]"
+            >
+              <Plus size={11} />
+            </button>
+            <button
+              onClick={() => handleOpenCreateFolder(folder.id)}
+              title="Add subfolder"
+              className="p-1 rounded text-zinc-400 hover:text-accent-secondary hover:bg-white/[0.06]"
+            >
+              <FolderPlus size={11} />
+            </button>
+            <button
+              onClick={() => handleOpenEditFolder(folder)}
+              title="Rename folder"
+              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/[0.06]"
+            >
+              <Pencil size={11} />
+            </button>
+            <button
+              onClick={() => setDeleteFolderModal(folder)}
+              title="Delete folder"
+              className="p-1 rounded text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10"
+            >
+              <Trash2 size={11} />
+            </button>
+          </div>
+        </div>
+
+        {/* Children (subfolders + notes) */}
+        {isExpanded && (
+          <div className="relative">
+            {/* Guide line */}
+            <div
+              className="absolute top-0 bottom-1 border-l border-white/[0.06]"
+              style={{ left: `${depth * 12 + 14}px` }}
+            />
+
+            {/* Subfolders */}
+            {childFolders.map(child => renderFolderNode(child, depth + 1))}
+
+            {/* Notes inside this folder */}
+            {folderNotes.map(n => renderNoteCard(n, 'ml-2'))}
+
+            {childFolders.length === 0 && folderNotes.length === 0 && (
+              <div
+                className="text-[10px] text-zinc-500 italic py-1"
+                style={{ paddingLeft: `${(depth + 1) * 12 + 14}px` }}
+              >
+                Empty folder
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Root level folders
+  const rootFolders = useMemo(() => {
+    const list = folders.filter(f => !f.parent_id);
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    return list;
+  }, [folders]);
+
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="h-full flex overflow-hidden">
@@ -330,18 +806,22 @@ const Notes: React.FC = () => {
         className={`${activeNote ? 'hidden lg:flex' : 'flex'} w-full lg:w-64 flex-shrink-0 border-r border-white/[0.035] flex-col bg-[#11151D]`}
       >
 
-        {/* Scoped-to-a-project banner */}
-        {projectFilterId && (
+        {/* Scoped-to-a-project or milestone banner */}
+        {(milestoneFilterId || projectFilterId) && (
           <div className="px-3 pt-3">
             <div className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg bg-accent-amber/10 border border-accent-amber/25">
               <div className="min-w-0">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-accent-amber/80">Project</p>
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-accent-amber/80">
+                  {milestoneFilterId ? 'Project Milestone' : 'Project'}
+                </p>
                 <p className="text-[11px] font-medium text-accent-amber truncate">
-                  {filterProject?.title ?? 'Unknown project'}
+                  {milestoneFilterId
+                    ? `${filterMilestone?.title ?? 'Milestone'} (${filterProject?.title ?? filterMilestone?.projectTitle ?? 'Project'})`
+                    : filterProject?.title ?? 'Unknown project'}
                 </p>
               </div>
               <button
-                onClick={clearProjectFilter}
+                onClick={clearFilter}
                 title="Show all notes"
                 className="p-1 rounded text-accent-amber/70 hover:text-accent-amber hover:bg-accent-amber/10 transition-colors cursor-pointer flex-shrink-0"
               >
@@ -352,7 +832,7 @@ const Notes: React.FC = () => {
         )}
 
         {/* Search */}
-        <div className="p-3 bg-[#11151D]">
+        <div className="p-3 pb-2 bg-[#11151D]">
           <div className="relative">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-muted" />
             <input
@@ -370,8 +850,9 @@ const Notes: React.FC = () => {
             />
           </div>
         </div>
+
         {/* Type filter tabs */}
-        <div className="px-3 py-2 bg-[#11151D]">
+        <div className="px-3 pb-2 bg-[#11151D]">
           <div className="grid grid-cols-3 bg-bg-surface2 rounded-lg p-0.5 gap-0.5 text-center">
             {([
               ['all', `All (${notes.length})`],
@@ -394,102 +875,93 @@ const Notes: React.FC = () => {
           </div>
         </div>
 
-        {/* New Note */}
-        <div className="p-3 bg-[#11151D]">
+        {/* Action Buttons: New Note & New Folder */}
+        <div className="px-3 pb-2 bg-[#11151D] flex items-center gap-1.5">
           <Button
             variant="primary"
             size="sm"
             icon={<Plus size={13} />}
-            onClick={handleNewNote}
-            className="w-full justify-center"
+            onClick={() => handleNewNote(null)}
+            className="flex-1 justify-center text-xs"
           >
             New Note
           </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<FolderPlus size={13} />}
+            onClick={() => handleOpenCreateFolder(null)}
+            title="Create new folder"
+            className="px-2.5 text-xs text-zinc-300 hover:text-white"
+          >
+            Folder
+          </Button>
         </div>
-        {/* Notes list */}
-        <div className="flex-1 overflow-y-auto py-1">
-          {loading && filtered.length === 0 && (
-            <p className="text-xs text-txt-muted text-center mt-6">Loading...</p>
+
+        {/* Notes & Folders Tree / Search View */}
+        <div className="flex-1 overflow-y-auto px-2 py-1">
+          {loading && notes.length === 0 && (
+            <p className="text-xs text-txt-muted text-center mt-6">Loading notes…</p>
           )}
-          {!loading && filtered.length === 0 && (
+
+          {!loading && filteredNotes.length === 0 && folders.length === 0 && (
             <p className="text-xs text-txt-muted text-center mt-6 px-4">
               {searchQuery
                 ? 'No notes match your search.'
+                : milestoneFilterId
+                ? 'No notes for this milestone yet.'
                 : projectFilterId
-                  ? 'No notes for this project yet.'
-                  : 'No notes yet.'}
+                ? 'No notes for this project yet.'
+                : 'No notes yet. Create your first note or organize with folders!'}
             </p>
           )}
-          <AnimatePresence initial={false}>
-            {filtered.map((note, i) => {
-              const isActive = activeNote?.id === note.id;
-              const link = getNoteLinkInfo(note);
-              return (
-                <motion.div
-                  key={note.id}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -8 }}
-                  transition={{ delay: i * 0.03, duration: 0.18 }}
-                  onClick={() => setActiveNote(note)}
-                  className={[
-                    'group relative px-3 py-2.5 cursor-pointer transition-colors',
-                    isActive
-                    ? 'bg-white/[0.045] border-l-2 border-accent-amber shadow-[inset_0_0_20px_rgb(var(--c-primary)/0.03)]'
-                    : 'border-l-2 border-transparent hover:bg-white/[0.025]'
-                  ].join(' ')}
-                >
-                  <div className="flex items-start justify-between gap-1">
-                    <div className="min-w-0 flex-1">
-                      <p className={[
-                        'text-xs font-medium truncate',
-                        isActive ? 'text-accent-amber' : 'text-txt-primary',
-                      ].join(' ')}>
-                        {note.title || 'Untitled'}
-                      </p>
 
-                      {/* Linked Badge */}
-                      {link && (
-                        <div className="flex items-center gap-1 mt-0.5 text-[10px] text-accent-amber/90 font-medium truncate">
-                          <span>{link.icon}</span>
-                          <span className="truncate">{link.label}</span>
-                        </div>
-                      )}
+          {/* Search Mode: Flat list with folder paths */}
+          {searchQuery.trim().length > 0 ? (
+            <div className="space-y-0.5">
+              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-txt-muted">
+                Search Results ({filteredNotes.length})
+              </div>
+              {filteredNotes.map((note) => renderNoteCard(note))}
+            </div>
+          ) : (
+            /* Tree View: Hierarchical Folders + Unfiled Notes */
+            <div className="space-y-1">
+              {/* Folders tree */}
+              {rootFolders.map((folder) => renderFolderNode(folder, 0))}
 
-                      <p className="text-[10px] text-txt-muted mt-0.5">
-                        {formatDate(note.updated_at)}
-                      </p>
-                      {note.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {note.tags.slice(0, 3).map((t) => (
-                            <span
-                              key={t}
-                              className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent-amber/10 text-accent-amber"
-                            >
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+              {/* Unfiled notes section */}
+              {unfiledNotes.length > 0 && (
+                <div className="pt-1.5 border-t border-white/[0.04] mt-2">
+                  <div
+                    onClick={() => setUnfiledExpanded(!unfiledExpanded)}
+                    className="flex items-center justify-between px-2 py-1 text-xs cursor-pointer text-zinc-400 hover:text-zinc-200 transition-colors rounded-lg hover:bg-white/[0.03]"
+                  >
+                    <div className="flex items-center gap-1.5 font-medium text-[11px] tracking-wide">
+                      <button type="button" className="text-zinc-500">
+                        {unfiledExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                      </button>
+                      <FileText size={12} className="text-zinc-400" />
+                      <span>Unfiled Notes</span>
+                      <span className="text-[10px] text-zinc-500 font-mono">({unfiledNotes.length})</span>
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setDeleteModal(note.id); }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-txt-muted hover:text-rose-400"
-                    >
-                      <Trash2 size={12} />
-                    </button>
                   </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
+
+                  {unfiledExpanded && (
+                    <div className="mt-0.5 pl-2 space-y-0.5">
+                      {unfiledNotes.map((note) => renderNoteCard(note))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer count */}
-        <div className="p-3 bg-[#0F131A]">
-          <p className="text-[10px] text-txt-muted text-center">
-            {filtered.length} {filtered.length === 1 ? 'note' : 'notes'}
-          </p>
+        <div className="p-2.5 bg-[#0F131A] border-t border-white/[0.035] flex items-center justify-between text-[10px] text-txt-muted px-3">
+          <span>{folders.length} {folders.length === 1 ? 'folder' : 'folders'}</span>
+          <span>{filteredNotes.length} {filteredNotes.length === 1 ? 'note' : 'notes'}</span>
         </div>
       </div>
 
@@ -506,23 +978,33 @@ const Notes: React.FC = () => {
             <div>
               <p className="text-txt-secondary font-medium">Select or create a note</p>
               <p className="text-txt-muted text-xs mt-1">
-                Your notes will appear here with rich text editing
+                Organize your thoughts into nested folders and link them to courses or projects
               </p>
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Plus size={13} />}
-              onClick={handleNewNote}
-            >
-              New Note
-            </Button>
+            <div className="flex items-center gap-2 mt-2">
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Plus size={13} />}
+                onClick={() => handleNewNote(null)}
+              >
+                New Note
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<FolderPlus size={13} />}
+                onClick={() => handleOpenCreateFolder(null)}
+              >
+                New Folder
+              </Button>
+            </div>
           </div>
         ) : (
           /* Active note editor */
           <div className="flex-1 flex flex-col min-h-0">
 
-            {/* ── Header: Link Bar + Title + Toolbar ─────────────────────── */}
+            {/* ── Header: Folder / Link Bar + Title + Toolbar ─────────────── */}
             <div className="flex-shrink-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 bg-[#0D0F14] space-y-2.5">
 
               {/* Back to list (mobile only) */}
@@ -534,8 +1016,27 @@ const Notes: React.FC = () => {
                 Back to notes
               </button>
 
-              {/* Linked entity bar */}
+              {/* Metadata Badges: Folder pill + Linked entity bar */}
               <div className="flex items-center gap-2 flex-wrap">
+                {/* Folder pill */}
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs text-zinc-300">
+                  <Folder size={12} className="text-accent-amber" />
+                  <span className="text-[11px] font-medium text-txt-secondary">
+                    {activeNote.folder_id ? getFolderPath(activeNote.folder_id) : 'Unfiled'}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setMoveNoteModal(activeNote);
+                      setTargetMoveFolderId(activeNote.folder_id || null);
+                    }}
+                    className="text-[10px] text-accent-amber hover:underline ml-1 cursor-pointer font-medium"
+                    title="Move note to another folder"
+                  >
+                    Move
+                  </button>
+                </div>
+
+                {/* Linked entity bar */}
                 {activeLinkInfo ? (
                   <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-accent-amber/10 border border-accent-amber/25 text-xs text-accent-amber">
                     <span className="text-sm">{activeLinkInfo.icon}</span>
@@ -544,8 +1045,23 @@ const Notes: React.FC = () => {
                     <div className="flex items-center gap-1.5 ml-1 pl-1.5 border-l border-accent-amber/30">
                       <button
                         onClick={() => {
-                          setEditLinkType(activeLinkInfo.type);
-                          setEditLinkedId(activeNote.course_id || activeNote.topic_id || activeNote.project_id || '');
+                          if (activeNote.milestone_id) {
+                            setEditLinkType('milestone');
+                            setEditLinkedId(activeNote.milestone_id);
+                            setEditProjectId(activeNote.project_id || '');
+                          } else if (activeNote.project_id) {
+                            setEditLinkType('project');
+                            setEditLinkedId(activeNote.project_id);
+                          } else if (activeNote.topic_id) {
+                            setEditLinkType('topic');
+                            setEditLinkedId(activeNote.topic_id);
+                          } else if (activeNote.course_id) {
+                            setEditLinkType('course');
+                            setEditLinkedId(activeNote.course_id);
+                          } else {
+                            setEditLinkType('course');
+                            setEditLinkedId('');
+                          }
                           setShowLinkModal(true);
                         }}
                         className="text-[10px] text-zinc-300 hover:text-white underline cursor-pointer"
@@ -577,23 +1093,23 @@ const Notes: React.FC = () => {
               </div>
 
               {/* Title */}
-                <div className="flex items-center gap-2">
-                  <FileText
-                    size={20}
-                    className="flex-shrink-0 text-accent-tertiary"
-                  />
+              <div className="flex items-center gap-2">
+                <FileText
+                  size={20}
+                  className="flex-shrink-0 text-accent-tertiary"
+                />
+                <input
+                  type="text"
+                  value={activeNote.title}
+                  onChange={handleTitleChange}
+                  placeholder="Note title..."
+                  className="
+                    w-full text-2xl font-bold bg-transparent border-none outline-none
+                    text-txt-primary placeholder:text-txt-muted/50
+                  "
+                />
+              </div>
 
-                  <input
-                    type="text"
-                    value={activeNote.title}
-                    onChange={handleTitleChange}
-                    placeholder="Note title..."
-                    className="
-                      w-full text-2xl font-bold bg-transparent border-none outline-none
-                      text-txt-primary placeholder:text-txt-muted/50
-                    "
-                  />
-                </div>
               {/* Toolbar */}
               {editor && (
                 <div className="flex items-center gap-0.5 flex-wrap">
@@ -759,7 +1275,7 @@ const Notes: React.FC = () => {
         )}
       </div>
 
-      {/* ── Delete confirmation modal ─────────────────────────────────────── */}
+      {/* ── Delete Note Confirmation Modal ───────────────────────────────── */}
       <Modal open={!!deleteModal} onClose={() => setDeleteModal(null)} title="Delete Note">
         <p className="text-txt-secondary text-sm mb-6">
           Are you sure you want to delete this note? This action cannot be undone.
@@ -769,6 +1285,177 @@ const Notes: React.FC = () => {
           <Button variant="danger" icon={<Trash2 size={14} />} onClick={handleDeleteConfirm}>
             Delete
           </Button>
+        </div>
+      </Modal>
+
+      {/* ── Create / Edit Folder Modal ───────────────────────────────────── */}
+      <Modal
+        open={showFolderModal}
+        onClose={() => setShowFolderModal(false)}
+        title={folderModalMode === 'create' ? 'Create New Folder' : 'Edit Folder'}
+        width="max-w-md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs text-txt-muted mb-1 font-medium">Folder Name *</label>
+            <input
+              type="text"
+              value={folderNameInput}
+              onChange={(e) => setFolderNameInput(e.target.value)}
+              placeholder="e.g. Frontend Architecture"
+              autoFocus
+              className="w-full bg-[#0D1017] border border-white/10 rounded-xl px-3 py-2 text-xs text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSaveFolder();
+                }
+              }}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-txt-muted mb-1 font-medium">Parent Folder (Optional)</label>
+            <select
+              value={folderModalParentId || ''}
+              onChange={(e) => setFolderModalParentId(e.target.value ? e.target.value : null)}
+              className="w-full bg-[#0D1017] border border-white/10 rounded-xl px-3 py-2 text-xs text-txt-primary outline-none focus:border-accent-amber/50"
+            >
+              <option value="">— Root Level (No Parent) —</option>
+              {folderOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {'\u00A0\u00A0'.repeat(opt.level)}{opt.level > 0 ? '↳ ' : ''}{opt.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-txt-muted mb-1.5 font-medium">Folder Accent Color</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {FOLDER_COLORS.map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  onClick={() => setFolderColorInput(folderColorInput === c.hex ? '' : c.hex)}
+                  className={`w-6 h-6 rounded-full transition-transform cursor-pointer border ${
+                    folderColorInput === c.hex ? 'scale-125 border-white shadow-lg' : 'border-transparent hover:scale-110'
+                  }`}
+                  style={{ backgroundColor: c.hex }}
+                  title={c.name}
+                />
+              ))}
+              {folderColorInput && (
+                <button
+                  type="button"
+                  onClick={() => setFolderColorInput('')}
+                  className="text-[10px] text-zinc-400 hover:text-white underline ml-1"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+
+          {folderError && (
+            <p className="text-[11px] text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+              {folderError}
+            </p>
+          )}
+
+          <div className="flex gap-2 justify-end pt-2 border-t border-white/[0.06]">
+            <Button variant="ghost" size="sm" type="button" onClick={() => setShowFolderModal(false)} disabled={isSavingFolder}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              type="button"
+              onClick={handleSaveFolder}
+              disabled={isSavingFolder || !folderNameInput.trim()}
+            >
+              {isSavingFolder ? 'Saving…' : folderModalMode === 'create' ? 'Create Folder' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Delete Folder Confirmation Modal ─────────────────────────────── */}
+      <Modal
+        open={!!deleteFolderModal}
+        onClose={() => setDeleteFolderModal(null)}
+        title="Delete Folder"
+        width="max-w-md"
+      >
+        <div className="space-y-4">
+          <p className="text-txt-secondary text-xs leading-relaxed">
+            Are you sure you want to delete <strong className="text-white">&quot;{deleteFolderModal?.name}&quot;</strong>?
+          </p>
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-accent-amber space-y-1">
+            <p className="font-semibold">Subfolders and notes:</p>
+            <p>• Nested subfolders inside this folder will also be deleted.</p>
+            <p>• <strong>Your notes will NOT be deleted</strong>. Any notes inside will safely move to <em>Unfiled Notes</em>.</p>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2 border-t border-white/[0.06]">
+            <Button variant="ghost" size="sm" onClick={() => setDeleteFolderModal(null)} disabled={isDeletingFolder}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              icon={<Trash2 size={13} />}
+              onClick={handleDeleteFolderConfirm}
+              disabled={isDeletingFolder}
+            >
+              {isDeletingFolder ? 'Deleting…' : 'Delete Folder'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Move Note Modal ──────────────────────────────────────────────── */}
+      <Modal
+        open={!!moveNoteModal}
+        onClose={() => setMoveNoteModal(null)}
+        title="Move Note to Folder"
+        width="max-w-md"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-txt-muted">
+            Choose where to place <strong className="text-white">&quot;{moveNoteModal?.title || 'Untitled'}&quot;</strong>:
+          </p>
+
+          <div>
+            <label className="block text-xs text-txt-muted mb-1 font-medium">Destination Folder</label>
+            <select
+              value={targetMoveFolderId || ''}
+              onChange={(e) => setTargetMoveFolderId(e.target.value ? e.target.value : null)}
+              className="w-full bg-[#0D1017] border border-white/10 rounded-xl px-3 py-2 text-xs text-txt-primary outline-none focus:border-accent-amber/50"
+            >
+              <option value="">— Unfiled (No folder) —</option>
+              {folderOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {'\u00A0\u00A0'.repeat(opt.level)}{opt.level > 0 ? '↳ ' : ''}{opt.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2 border-t border-white/[0.06]">
+            <Button variant="ghost" size="sm" onClick={() => setMoveNoteModal(null)} disabled={isMovingNote}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<FolderInput size={13} />}
+              onClick={handleMoveNoteConfirm}
+              disabled={isMovingNote}
+            >
+              {isMovingNote ? 'Moving…' : 'Move Note'}
+            </Button>
+          </div>
         </div>
       </Modal>
 
@@ -785,6 +1472,23 @@ const Notes: React.FC = () => {
               autoFocus
               className="w-full bg-[#0D1017] border border-white/10 rounded-xl px-3 py-2 text-xs text-txt-primary outline-none focus:border-accent-amber/50 transition-colors"
             />
+          </div>
+
+          {/* Folder selection in New Note */}
+          <div>
+            <label className="block text-xs text-txt-muted mb-1 font-medium">Folder (Optional)</label>
+            <select
+              value={newNoteFolderId || ''}
+              onChange={(e) => setNewNoteFolderId(e.target.value ? e.target.value : null)}
+              className="w-full bg-[#0D1017] border border-white/10 rounded-xl px-3 py-2 text-xs text-txt-primary outline-none focus:border-accent-amber/50"
+            >
+              <option value="">— Unfiled (No folder) —</option>
+              {folderOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {'\u00A0\u00A0'.repeat(opt.level)}{opt.level > 0 ? '↳ ' : ''}{opt.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -844,7 +1548,7 @@ const Notes: React.FC = () => {
                   }`}
                 >
                   <span>🗺️</span>
-                  <span>Milestone</span>
+                  <span>Topic</span>
                 </button>
                 <button
                   type="button"
@@ -858,18 +1562,37 @@ const Notes: React.FC = () => {
                   <span>💼</span>
                   <span>Project</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => { setNewNoteLinkType('milestone'); setNewNoteLinkedId(''); }}
+                  className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    newNoteLinkType === 'milestone'
+                      ? 'bg-accent-amber text-[#0D0F14] font-semibold'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <span>🎯</span>
+                  <span>Milestone</span>
+                </button>
               </div>
 
               <div>
                 <label className="block text-[11px] text-txt-muted mb-1 font-medium">
-                  Select {newNoteLinkType === 'course' ? 'Course' : newNoteLinkType === 'topic' ? 'Roadmap Milestone' : 'Project'} *
+                  Select {newNoteLinkType === 'course' ? 'Course' : newNoteLinkType === 'topic' ? 'Roadmap Topic' : newNoteLinkType === 'project' ? 'Project' : 'Project Milestone'} *
                 </label>
                 <select
                   value={newNoteLinkedId}
-                  onChange={e => setNewNoteLinkedId(e.target.value)}
+                  onChange={e => {
+                    const mid = e.target.value;
+                    setNewNoteLinkedId(mid);
+                    if (newNoteLinkType === 'milestone') {
+                      const m = allProjectMilestones.find(item => item.id === mid);
+                      if (m) setNewNoteProjectId(m.project_id);
+                    }
+                  }}
                   className="w-full bg-[#0D1017] border border-white/10 focus:border-accent-amber/40 rounded-xl px-3 py-2 text-xs text-txt-primary outline-none"
                 >
-                  <option value="">— Select {newNoteLinkType} —</option>
+                  <option value="">— Select {newNoteLinkType === 'milestone' ? 'Project Milestone' : newNoteLinkType} —</option>
                   {newNoteLinkType === 'course' && courses.map(c => (
                     <option key={c.id} value={c.id}>{c.title}</option>
                   ))}
@@ -879,7 +1602,25 @@ const Notes: React.FC = () => {
                   {newNoteLinkType === 'project' && projects.map(p => (
                     <option key={p.id} value={p.id}>{p.title}</option>
                   ))}
+                  {newNoteLinkType === 'milestone' && projects.map(p => {
+                    const pMilestones = milestones[p.id] || [];
+                    if (pMilestones.length === 0) return null;
+                    return (
+                      <optgroup key={p.id} label={`💼 ${p.title}`}>
+                        {pMilestones.map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
                 </select>
+                {newNoteLinkType === 'milestone' && allProjectMilestones.length === 0 && (
+                  <p className="text-[11px] text-zinc-500 mt-1.5 italic">
+                    No milestones found in your projects yet.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -936,7 +1677,7 @@ const Notes: React.FC = () => {
               }`}
             >
               <span>🗺️</span>
-              <span>Milestone</span>
+              <span>Topic</span>
             </button>
             <button
               type="button"
@@ -950,18 +1691,37 @@ const Notes: React.FC = () => {
               <span>💼</span>
               <span>Project</span>
             </button>
+            <button
+              type="button"
+              onClick={() => { setEditLinkType('milestone'); setEditLinkedId(''); }}
+              className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                editLinkType === 'milestone'
+                  ? 'bg-accent-amber text-[#0D0F14] font-semibold'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <span>🎯</span>
+              <span>Milestone</span>
+            </button>
           </div>
 
           <div>
             <label className="block text-[11px] text-txt-muted mb-1 font-medium">
-              Select {editLinkType === 'course' ? 'Course' : editLinkType === 'topic' ? 'Roadmap Milestone' : 'Project'} *
+              Select {editLinkType === 'course' ? 'Course' : editLinkType === 'topic' ? 'Roadmap Topic' : editLinkType === 'project' ? 'Project' : 'Project Milestone'} *
             </label>
             <select
               value={editLinkedId}
-              onChange={e => setEditLinkedId(e.target.value)}
+              onChange={e => {
+                const mid = e.target.value;
+                setEditLinkedId(mid);
+                if (editLinkType === 'milestone') {
+                  const m = allProjectMilestones.find(item => item.id === mid);
+                  if (m) setEditProjectId(m.project_id);
+                }
+              }}
               className="w-full bg-[#0D1017] border border-white/10 focus:border-accent-amber/40 rounded-xl px-3 py-2 text-xs text-txt-primary outline-none"
             >
-              <option value="">— Select {editLinkType} —</option>
+              <option value="">— Select {editLinkType === 'milestone' ? 'Project Milestone' : editLinkType} —</option>
               {editLinkType === 'course' && courses.map(c => (
                 <option key={c.id} value={c.id}>{c.title}</option>
               ))}
@@ -971,7 +1731,25 @@ const Notes: React.FC = () => {
               {editLinkType === 'project' && projects.map(p => (
                 <option key={p.id} value={p.id}>{p.title}</option>
               ))}
+              {editLinkType === 'milestone' && projects.map(p => {
+                const pMilestones = milestones[p.id] || [];
+                if (pMilestones.length === 0) return null;
+                return (
+                  <optgroup key={p.id} label={`💼 ${p.title}`}>
+                    {pMilestones.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.title}
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              })}
             </select>
+            {editLinkType === 'milestone' && allProjectMilestones.length === 0 && (
+              <p className="text-[11px] text-zinc-500 mt-1.5 italic">
+                No milestones found in your projects yet.
+              </p>
+            )}
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-white/[0.06]">
