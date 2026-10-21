@@ -1184,6 +1184,76 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.project_milestones TO authe
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.milestone_items TO authenticated, service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.project_invites TO authenticated, service_role;
 
+-- =============================================================================
+--  SECTION 13 — GLOBAL SYSTEM SETTINGS (Academic mode toggle, etc.)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public.system_settings (
+  key        TEXT PRIMARY KEY,
+  value      JSONB NOT NULL,
+  updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS system_settings_read ON public.system_settings;
+CREATE POLICY system_settings_read ON public.system_settings
+  FOR SELECT TO authenticated, anon
+  USING (true);
+
+DROP POLICY IF EXISTS system_settings_admin_write ON public.system_settings;
+CREATE POLICY system_settings_admin_write ON public.system_settings
+  FOR ALL TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+GRANT SELECT ON TABLE public.system_settings TO anon, authenticated;
+GRANT ALL ON TABLE public.system_settings TO authenticated, service_role;
+
+INSERT INTO public.system_settings (key, value)
+VALUES ('academic_mode_enabled', 'true'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION public.set_academic_mode(enabled BOOLEAN)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND NOT public.is_admin() THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Not authorised: admin access required.');
+  END IF;
+
+  INSERT INTO public.system_settings (key, value, updated_by, updated_at)
+  VALUES ('academic_mode_enabled', to_jsonb(enabled), auth.uid(), NOW())
+  ON CONFLICT (key) DO UPDATE
+    SET value = EXCLUDED.value,
+        updated_by = EXCLUDED.updated_by,
+        updated_at = EXCLUDED.updated_at;
+
+  RETURN jsonb_build_object('success', true, 'enabled', enabled);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.set_academic_mode(BOOLEAN) TO authenticated, service_role;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_publication
+    WHERE pubname = 'supabase_realtime'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime'
+          AND schemaname = 'public'
+          AND tablename = 'system_settings'
+      )
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.system_settings;
+  END IF;
+END $$;
+
+
 
 -- =============================================================================
 --  SECTION 12 — ⚠️  DO THIS: MAKE YOURSELF AN ADMIN

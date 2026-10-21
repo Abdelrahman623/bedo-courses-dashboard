@@ -61,14 +61,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
    * before this runs, to avoid a flash of the default colours.
    */
   const applyAccountTheme = useCallback(async () => {
-    const prefs = await loadUserState<{ theme?: string; academic_mode_enabled?: boolean }>('preferences', {});
+    const prefs = await loadUserState<{ theme?: string }>('preferences', {});
     if (prefs.theme) {
       applyTheme(prefs.theme);
       themeCache.set(prefs.theme);
     }
-    if (typeof prefs.academic_mode_enabled === 'boolean') {
-      useUIStore.getState().setAcademicModeEnabled(prefs.academic_mode_enabled);
-    }
+    void useUIStore.getState().fetchAcademicMode();
   }, []);
 
   const checkProfile = useCallback(async (u: User): Promise<boolean> => {

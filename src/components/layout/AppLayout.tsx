@@ -8,6 +8,7 @@ import { useRoadmapStore } from '../../store/roadmapStore';
 import { useNotesStore } from '../../store/notesStore';
 import { useProjectsStore } from '../../store/projectsStore';
 import { useSessionStore } from '../../store/sessionStore';
+import { useUIStore } from '../../store/uiStore';
 
 const pageVariants = {
   initial: { opacity: 0, y: 12 },
@@ -31,6 +32,15 @@ export const AppLayout: React.FC = () => {
   const fetchSessions = useSessionStore(s => s.fetchSessions);
   const timerRunning  = useSessionStore(s => s.timerRunning);
   const tickTimer     = useSessionStore(s => s.tickTimer);
+  const fetchAcademicMode     = useUIStore(s => s.fetchAcademicMode);
+  const subscribeAcademicMode = useUIStore(s => s.subscribeAcademicMode);
+
+  // Sync global system settings (academic mode enabled/stopped) for all users
+  useEffect(() => {
+    void fetchAcademicMode();
+    const unsub = subscribeAcademicMode();
+    return () => unsub();
+  }, [fetchAcademicMode, subscribeAcademicMode]);
 
   // The Pomodoro/stopwatch instrument is usable from more than one screen
   // now (Home's Focus card, the full Tracker page), so the ticking interval

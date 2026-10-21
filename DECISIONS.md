@@ -342,21 +342,27 @@ an SVG `CursorLayer`. This made personal course roadmaps appear shared across us
 - Cycle/recursion prevention (`isDescendant` check) when selecting parent folder during creation or renaming.
 - Folder color accent picker supporting multiple presets (Amber, Emerald, Blue, Purple, Rose, Cyan).
 
-## Admin Stop Academic Mode Control
+## Admin Stop Academic Mode Control (Global System-Wide Setting)
 
-**Request**: As an admin, have a button that can stop Academic Mode.
+**Request**: As an admin, have a button that can stop Academic Mode, and ensure it stops globally for all users.
 
 **Architecture & Implementation**:
-1. **State Management (`src/store/uiStore.ts`)**:
-   - Added `academicModeEnabled` flag (persisted in `localStorage` under `bedo_academic_mode_enabled` and synced to account preferences in Supabase `user_state`).
-   - Added `stopAcademicMode()`: disables `academicModeEnabled`, switches active mode to `'courses'`, and persists preference.
-   - Added `startAcademicMode()`: re-enables `academicModeEnabled`, switches mode to `'academic'`, and persists preference.
+1. **Global Database Persistence (`public.system_settings`)**:
+   - Created `public.system_settings` (`key TEXT PRIMARY KEY, value JSONB, updated_by UUID, updated_at TIMESTAMPTZ`) in `supabase_migration_system_settings.sql` and incorporated into Section 13 of `supabase_setup.sql`.
+   - RLS: Readable by all users (`anon`, `authenticated`), but strictly writable only by administrators (`public.is_admin()`).
+   - Added to `supabase_realtime` publication for instant zero-refresh updates across all connected user sessions.
+   - Provided `public.set_academic_mode(enabled BOOLEAN)` RPC function with admin security check.
+
+2. **State Management (`src/store/uiStore.ts` & `src/components/layout/AppLayout.tsx`)**:
+   - `academicModeEnabled` flag synced from `public.system_settings` on mount and live-subscribed via Supabase realtime in `AppLayout.tsx`.
+   - `stopAcademicMode()`: updates `system_settings` (RPC or direct upsert) to `false` and switches active mode to `'courses'` globally.
+   - `startAcademicMode()`: updates `system_settings` to `true` and switches active mode to `'academic'` globally.
    - Guarded `setMode('academic')` and `toggleMode()` so non-admin users cannot activate Academic Mode while it is stopped.
 
-2. **Route Protection (`src/App.tsx`)**:
+3. **Route Protection (`src/App.tsx`)**:
    - Wrapped academic routes (`/timetable`, `/deadlines`, `/grades`) with an `academicModeEnabled` check, automatically redirecting to `/courses` if visited while Academic mode is stopped.
 
-3. **UI Admin Controls**:
+4. **UI Admin Controls**:
    - **Sidebar (`src/components/layout/Sidebar.tsx`)**:
      - When Academic mode is active, admins see a prominent red `[ ⏹ Stop Academic Mode ]` button right below the mode switcher.
      - When stopped, admins see an `Academic Stopped` status card with `[ ▶ Start Academic Mode ]`, while non-admins see only the standard Courses view.
