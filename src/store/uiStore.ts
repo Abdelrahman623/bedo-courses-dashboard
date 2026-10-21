@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { CourseMode } from '../types';
+import { queueUserState } from '../lib/userState';
 
 // Shared UI chrome state. Currently: the off-canvas sidebar used on
 // phone/tablet widths (below the `lg` breakpoint) — TopBar's hamburger
@@ -7,14 +8,29 @@ import type { CourseMode } from '../types';
 // backdrop click — and the global Academic/Courses mode switcher.
 
 const MODE_STORAGE_KEY = 'bedo_ui_mode';
+const ACADEMIC_ENABLED_STORAGE_KEY = 'bedo_academic_mode_enabled';
 
-// A display preference, not account data — it doesn't need to survive on
-// another device, so it's kept the same way the theme paint-hint is (see
-// storage.ts's `themeCache`): read synchronously on load, cleared on
-// sign-out along with everything else prefixed `bedo_` (clearAllUserData
-// already sweeps this key, no change needed there).
+function readStoredAcademicEnabled(): boolean {
+  try {
+    const stored = localStorage.getItem(ACADEMIC_ENABLED_STORAGE_KEY);
+    return stored !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function writeStoredAcademicEnabled(enabled: boolean): void {
+  try {
+    localStorage.setItem(ACADEMIC_ENABLED_STORAGE_KEY, enabled ? 'true' : 'false');
+  } catch {
+    /* private browsing, quota, etc. */
+  }
+}
+
 function readStoredMode(): CourseMode {
   try {
+    const isAcademicEnabled = readStoredAcademicEnabled();
+    if (!isAcademicEnabled) return 'courses';
     const stored = localStorage.getItem(MODE_STORAGE_KEY);
     return stored === 'academic' ? 'academic' : 'courses';
   } catch {
@@ -36,12 +52,17 @@ interface UIState {
   closeMobileSidebar: () => void;
   toggleMobileSidebar: () => void;
 
-  /** Which of the two coexisting modes is currently displayed. Switching
-   *  only changes what's shown — courses in the other mode are never
-   *  deleted, hidden permanently, or otherwise affected by this toggle. */
+  /** Which of the two coexisting modes is currently displayed. */
   mode: CourseMode;
   setMode: (mode: CourseMode) => void;
   toggleMode: () => void;
+
+  /** Whether Academic Mode is enabled by administrators. When stopped/disabled,
+   *  the dashboard remains strictly in 'courses' mode and the switcher is deactivated. */
+  academicModeEnabled: boolean;
+  setAcademicModeEnabled: (enabled: boolean) => void;
+  stopAcademicMode: () => void;
+  startAcademicMode: () => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -50,14 +71,48 @@ export const useUIStore = create<UIState>((set, get) => ({
   closeMobileSidebar: () => set({ mobileSidebarOpen: false }),
   toggleMobileSidebar: () => set(s => ({ mobileSidebarOpen: !s.mobileSidebarOpen })),
 
+  academicModeEnabled: readStoredAcademicEnabled(),
   mode: readStoredMode(),
+
   setMode: (mode) => {
+    if (mode === 'academic' && !get().academicModeEnabled) {
+      return;
+    }
     writeStoredMode(mode);
     set({ mode });
   },
+
   toggleMode: () => {
+    if (!get().academicModeEnabled) {
+      set({ mode: 'courses' });
+      return;
+    }
     const next: CourseMode = get().mode === 'academic' ? 'courses' : 'academic';
     writeStoredMode(next);
     set({ mode: next });
+  },
+
+  setAcademicModeEnabled: (enabled: boolean) => {
+    writeStoredAcademicEnabled(enabled);
+    if (!enabled && get().mode === 'academic') {
+      writeStoredMode('courses');
+      set({ academicModeEnabled: false, mode: 'courses' });
+    } else {
+      set({ academicModeEnabled: enabled });
+    }
+  },
+
+  stopAcademicMode: () => {
+    writeStoredAcademicEnabled(false);
+    writeStoredMode('courses');
+    set({ academicModeEnabled: false, mode: 'courses' });
+    queueUserState('preferences', { academic_mode_enabled: false });
+  },
+
+  startAcademicMode: () => {
+    writeStoredAcademicEnabled(true);
+    writeStoredMode('academic');
+    set({ academicModeEnabled: true, mode: 'academic' });
+    queueUserState('preferences', { academic_mode_enabled: true });
   },
 }));

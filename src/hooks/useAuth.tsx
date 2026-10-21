@@ -5,6 +5,7 @@ import { clearAllUserData, themeCache } from '../lib/storage';
 import { resetAllStores } from '../lib/resetStores';
 import { loadUserState, flushUserState } from '../lib/userState';
 import { applyTheme } from '../lib/themes';
+import { useUIStore } from '../store/uiStore';
 import type { Profile } from '../types';
 
 interface AuthContextValue {
@@ -60,10 +61,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
    * before this runs, to avoid a flash of the default colours.
    */
   const applyAccountTheme = useCallback(async () => {
-    const prefs = await loadUserState<{ theme?: string }>('preferences', {});
+    const prefs = await loadUserState<{ theme?: string; academic_mode_enabled?: boolean }>('preferences', {});
     if (prefs.theme) {
       applyTheme(prefs.theme);
       themeCache.set(prefs.theme);
+    }
+    if (typeof prefs.academic_mode_enabled === 'boolean') {
+      useUIStore.getState().setAcademicModeEnabled(prefs.academic_mode_enabled);
     }
   }, []);
 

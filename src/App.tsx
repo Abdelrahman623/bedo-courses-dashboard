@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import { useUIStore } from './store/uiStore';
 import { AppLayout } from './components/layout/AppLayout';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
@@ -28,15 +29,16 @@ const LoadingScreen = () => (
 // ── Protected route wrapper ───────────────────────────────────────────────────
 const ProtectedRoutes = () => {
   const { user, loading } = useAuth();
+  const academicModeEnabled = useUIStore(s => s.academicModeEnabled);
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   return (
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/"          element={<Home />} />
-        <Route path="/timetable" element={<Timetable />} />
-        <Route path="/deadlines" element={<Deadlines />} />
-        <Route path="/grades"    element={<Grades />} />
+        <Route path="/timetable" element={academicModeEnabled ? <Timetable /> : <Navigate to="/courses" replace />} />
+        <Route path="/deadlines" element={academicModeEnabled ? <Deadlines /> : <Navigate to="/courses" replace />} />
+        <Route path="/grades"    element={academicModeEnabled ? <Grades /> : <Navigate to="/courses" replace />} />
         <Route path="/courses"   element={<Courses />} />
         <Route path="/notes"     element={<Notes />} />
         <Route path="/projects"  element={<Projects />} />

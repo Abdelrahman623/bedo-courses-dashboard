@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
+import { NavLink, useLocation, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid, GitFork, BookOpen, FileEdit,
   FolderKanban, Activity, BarChart2, CalendarDays, CalendarClock,
-  Settings, ChevronLeft, X, GraduationCap, Route,
+  Settings, ChevronLeft, X, GraduationCap, Route, Square, Play,
 } from 'lucide-react';
 import { useUIStore } from '../../store/uiStore';
+import { useAuth } from '../../hooks/useAuth';
 import type { CourseMode } from '../../types';
 
 interface NavItem {
@@ -85,11 +86,16 @@ function buildNavSections(mode: CourseMode): NavSection[] {
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { isAdmin } = useAuth();
   const mobileOpen = useUIStore(s => s.mobileSidebarOpen);
   const closeMobile = useUIStore(s => s.closeMobileSidebar);
   const mode = useUIStore(s => s.mode);
   const setMode = useUIStore(s => s.setMode);
+  const academicModeEnabled = useUIStore(s => s.academicModeEnabled);
+  const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
+  const startAcademicMode = useUIStore(s => s.startAcademicMode);
 
   // Below `lg`, the sidebar is an off-canvas drawer, so any navigation
   // (a nav item, or Settings) should close it behind you.
@@ -192,41 +198,85 @@ export const Sidebar: React.FC = () => {
             only changes what's displayed below and on Home; it never
             deletes or hides either mode's courses. */}
         <div className="px-3 pb-3 flex-shrink-0">
-          <div
-            role="tablist"
-            aria-label="Learning mode"
-            className={[
-              'flex bg-white/[0.04] border border-white/[0.08] rounded-xl p-1',
-              collapsed ? 'flex-col gap-1' : 'gap-1',
-            ].join(' ')}
-          >
-            {(
-              [
-                { id: 'courses' as CourseMode, label: 'Courses', icon: Route },
-                { id: 'academic' as CourseMode, label: 'Academic', icon: GraduationCap },
-              ]
-            ).map(({ id, label, icon: Icon }) => {
-              const active = mode === id;
-              return (
+          {academicModeEnabled ? (
+            <div className="space-y-1.5">
+              <div
+                role="tablist"
+                aria-label="Learning mode"
+                className={[
+                  'flex bg-white/[0.04] border border-white/[0.08] rounded-xl p-1',
+                  collapsed ? 'flex-col gap-1' : 'gap-1',
+                ].join(' ')}
+              >
+                {(
+                  [
+                    { id: 'courses' as CourseMode, label: 'Courses', icon: Route },
+                    { id: 'academic' as CourseMode, label: 'Academic', icon: GraduationCap },
+                  ]
+                ).map(({ id, label, icon: Icon }) => {
+                  const active = mode === id;
+                  return (
+                    <button
+                      key={id}
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setMode(id)}
+                      title={collapsed ? label : undefined}
+                      className={[
+                        'flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 cursor-pointer',
+                        active
+                          ? 'bg-accent-amber/15 text-accent-amber border border-accent-amber/30'
+                          : 'text-zinc-500 hover:text-zinc-300 border border-transparent',
+                      ].join(' ')}
+                    >
+                      <Icon size={14} />
+                      {!collapsed && <span>{label}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Admin "Stop Academic Mode" button */}
+              {isAdmin && mode === 'academic' && (
                 <button
-                  key={id}
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setMode(id)}
-                  title={collapsed ? label : undefined}
-                  className={[
-                    'flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-150 cursor-pointer',
-                    active
-                      ? 'bg-accent-amber/15 text-accent-amber border border-accent-amber/30'
-                      : 'text-zinc-500 hover:text-zinc-300 border border-transparent',
-                  ].join(' ')}
+                  type="button"
+                  onClick={() => {
+                    stopAcademicMode();
+                    if (['/timetable', '/deadlines', '/grades'].some(p => location.pathname.startsWith(p))) {
+                      navigate('/courses');
+                    }
+                  }}
+                  title="Stop Academic Mode (Admin only)"
+                  className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 transition-all cursor-pointer shadow-sm group"
                 >
-                  <Icon size={14} />
-                  {!collapsed && <span>{label}</span>}
+                  <Square size={10} className="fill-current text-rose-400 group-hover:scale-110 transition-transform" />
+                  {!collapsed && <span>Stop Academic Mode</span>}
                 </button>
-              );
-            })}
-          </div>
+              )}
+            </div>
+          ) : (
+            /* Academic mode is stopped */
+            isAdmin ? (
+              <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.08] text-center space-y-1.5">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[10px] font-semibold text-zinc-400 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" />
+                    {!collapsed && <span>Academic Stopped</span>}
+                  </span>
+                  <span className="text-[9px] font-mono text-zinc-500 uppercase">Admin</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => startAcademicMode()}
+                  title="Start Academic Mode (Admin)"
+                  className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-all cursor-pointer"
+                >
+                  <Play size={10} className="fill-current" />
+                  {!collapsed && <span>Start Academic Mode</span>}
+                </button>
+              </div>
+            ) : null
+          )}
         </div>
 
       {/* Grouped Navigation */}

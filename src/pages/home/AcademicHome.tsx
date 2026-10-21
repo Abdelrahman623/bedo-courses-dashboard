@@ -1,13 +1,14 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  GraduationCap, Clock, CalendarClock, Compass, MapPin,
+  GraduationCap, Clock, CalendarClock, Compass, MapPin, Square,
 } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { FocusWidget } from '../../components/focus/FocusWidget';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import { useAuth } from '../../hooks/useAuth';
+import { useUIStore } from '../../store/uiStore';
 import type { Assessment, Course, Schedule } from '../../types';
 
 const DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -50,6 +51,8 @@ export const AcademicHome: React.FC = () => {
 
   const userName = profile?.name || profile?.username || user?.user_metadata?.full_name || user?.user_metadata?.name || 'there';
   const activeCourses = getActiveCourses('academic');
+  const { isAdmin } = useAuth();
+  const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
 
   const now = new Date();
   const hour = now.getHours();
@@ -119,9 +122,24 @@ export const AcademicHome: React.FC = () => {
             {' · '}{activeCourses.length} active course{activeCourses.length === 1 ? '' : 's'}
           </p>
         </div>
-        <Button variant="tonal" size="sm" icon={<Compass size={14} />} onClick={() => navigate('/courses')}>
-          View All Courses
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && (
+            <Button
+              variant="danger"
+              size="sm"
+              icon={<Square size={12} className="fill-current" />}
+              onClick={() => {
+                stopAcademicMode();
+                navigate('/');
+              }}
+            >
+              Stop Academic Mode
+            </Button>
+          )}
+          <Button variant="tonal" size="sm" icon={<Compass size={14} />} onClick={() => navigate('/courses')}>
+            View All Courses
+          </Button>
+        </div>
       </div>
 
       {/* ── KPI strip ─────────────────────────────────────────────── */}

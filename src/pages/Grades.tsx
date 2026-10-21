@@ -2,12 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   GraduationCap, Compass, Pencil, Trash2,
-  FileText, HelpCircle, BookOpenCheck, CalendarClock,
+  FileText, HelpCircle, BookOpenCheck, CalendarClock, Square,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { useRoadmapStore } from '../store/roadmapStore';
+import { useAuth } from '../hooks/useAuth';
+import { useUIStore } from '../store/uiStore';
 import type { Assessment, AssessmentType, Grade } from '../types';
 
 const TONES = ['amber', 'secondary', 'tertiary', 'highlight'] as const;
@@ -49,6 +51,8 @@ export const Grades: React.FC = () => {
   } = useRoadmapStore();
 
   const activeCourses = getActiveCourses('academic');
+  const { isAdmin } = useAuth();
+  const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
   const toneByCourse = useMemo(() => {
     const map = new Map<string, Tone>();
     activeCourses.forEach((c, i) => map.set(c.id, TONES[i % TONES.length]));
@@ -155,9 +159,25 @@ export const Grades: React.FC = () => {
             Score assessments to see each course's grade and your overall GPA.
           </p>
         </div>
-        <Button variant="tonal" size="sm" icon={<CalendarClock size={14} />} onClick={() => navigate('/deadlines')}>
-          Manage Assessments
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && (
+            <Button
+              variant="danger"
+              size="sm"
+              icon={<Square size={12} className="fill-current" />}
+              onClick={() => {
+                stopAcademicMode();
+                navigate('/courses');
+              }}
+              title="Stop Academic Mode (Admin)"
+            >
+              Stop Academic Mode
+            </Button>
+          )}
+          <Button variant="tonal" size="sm" icon={<CalendarClock size={14} />} onClick={() => navigate('/deadlines')}>
+            Manage Assessments
+          </Button>
+        </div>
       </div>
 
       {/* ── GPA strip ─────────────────────────────────────────────── */}

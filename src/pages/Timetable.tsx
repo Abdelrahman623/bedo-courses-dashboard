@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  CalendarDays, Plus, MapPin, Pencil, Trash2, Compass, GraduationCap,
+  CalendarDays, Plus, MapPin, Pencil, Trash2, Compass, GraduationCap, Square,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { useRoadmapStore } from '../store/roadmapStore';
+import { useAuth } from '../hooks/useAuth';
+import { useUIStore } from '../store/uiStore';
 import type { Course, DayOfWeek, Schedule } from '../types';
 
 // Displayed Mon → Sun (the academic week), independent of DayOfWeek's
@@ -110,6 +112,8 @@ export const Timetable: React.FC = () => {
   } = useRoadmapStore();
 
   const activeCourses = getActiveCourses('academic');
+  const { isAdmin } = useAuth();
+  const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
   const toneByCourse = useMemo(() => {
     const map = new Map<string, Tone>();
     activeCourses.forEach((c, i) => map.set(c.id, TONES[i % TONES.length]));
@@ -275,9 +279,25 @@ export const Timetable: React.FC = () => {
             Weekly schedule across {activeCourses.length} active academic course{activeCourses.length === 1 ? '' : 's'}.
           </p>
         </div>
-        <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => openCreate()}>
-          Add Class
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && (
+            <Button
+              variant="danger"
+              size="sm"
+              icon={<Square size={12} className="fill-current" />}
+              onClick={() => {
+                stopAcademicMode();
+                navigate('/courses');
+              }}
+              title="Stop Academic Mode (Admin)"
+            >
+              Stop Academic Mode
+            </Button>
+          )}
+          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => openCreate()}>
+            Add Class
+          </Button>
+        </div>
       </div>
 
       {/* Course legend */}

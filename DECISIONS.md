@@ -342,3 +342,31 @@ an SVG `CursorLayer`. This made personal course roadmaps appear shared across us
 - Cycle/recursion prevention (`isDescendant` check) when selecting parent folder during creation or renaming.
 - Folder color accent picker supporting multiple presets (Amber, Emerald, Blue, Purple, Rose, Cyan).
 
+## Admin Stop Academic Mode Control
+
+**Request**: As an admin, have a button that can stop Academic Mode.
+
+**Architecture & Implementation**:
+1. **State Management (`src/store/uiStore.ts`)**:
+   - Added `academicModeEnabled` flag (persisted in `localStorage` under `bedo_academic_mode_enabled` and synced to account preferences in Supabase `user_state`).
+   - Added `stopAcademicMode()`: disables `academicModeEnabled`, switches active mode to `'courses'`, and persists preference.
+   - Added `startAcademicMode()`: re-enables `academicModeEnabled`, switches mode to `'academic'`, and persists preference.
+   - Guarded `setMode('academic')` and `toggleMode()` so non-admin users cannot activate Academic Mode while it is stopped.
+
+2. **Route Protection (`src/App.tsx`)**:
+   - Wrapped academic routes (`/timetable`, `/deadlines`, `/grades`) with an `academicModeEnabled` check, automatically redirecting to `/courses` if visited while Academic mode is stopped.
+
+3. **UI Admin Controls**:
+   - **Sidebar (`src/components/layout/Sidebar.tsx`)**:
+     - When Academic mode is active, admins see a prominent red `[ ⏹ Stop Academic Mode ]` button right below the mode switcher.
+     - When stopped, admins see an `Academic Stopped` status card with `[ ▶ Start Academic Mode ]`, while non-admins see only the standard Courses view.
+   - **Academic Home (`src/pages/home/AcademicHome.tsx`)**:
+     - Admins have a direct `[ ⏹ Stop Academic Mode ]` button in the overview header.
+   - **Courses Page (`src/pages/Courses.tsx`)**:
+     - When viewing in Academic mode, admins have a `[ ⏹ Stop Academic Mode ]` button in the top action toolbar.
+   - **Academic Subpages (`Timetable.tsx`, `Deadlines.tsx`, `Grades.tsx`)**:
+     - Admins have a `[ ⏹ Stop Academic Mode ]` button in the header that stops the mode and gracefully navigates to `/courses`.
+   - **Settings Admin Panel (`src/pages/Settings.tsx`)**:
+     - Added an **Academic Mode System Control** card under the Admin User Management tab displaying live status badge (`ACTIVE / RUNNING` vs `STOPPED`) and toggle buttons.
+
+

@@ -2,12 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarClock, Plus, Pencil, Trash2, Compass, GraduationCap,
-  AlertTriangle, CheckCircle2, FileText, HelpCircle, BookOpenCheck,
+  AlertTriangle, CheckCircle2, FileText, HelpCircle, BookOpenCheck, Square,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { useRoadmapStore } from '../store/roadmapStore';
+import { useAuth } from '../hooks/useAuth';
+import { useUIStore } from '../store/uiStore';
 import type { Assessment, AssessmentType, Course } from '../types';
 
 const TONES = ['amber', 'secondary', 'tertiary', 'highlight'] as const;
@@ -60,6 +62,8 @@ export const Deadlines: React.FC = () => {
   } = useRoadmapStore();
 
   const activeCourses = getActiveCourses('academic');
+  const { isAdmin } = useAuth();
+  const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
   const toneByCourse = useMemo(() => {
     const map = new Map<string, Tone>();
     activeCourses.forEach((c, i) => map.set(c.id, TONES[i % TONES.length]));
@@ -259,9 +263,25 @@ export const Deadlines: React.FC = () => {
             {allAssessments.length} exam{allAssessments.length === 1 ? '' : 's'}, quiz{allAssessments.length === 1 ? '' : 'zes'} and assignments tracked.
           </p>
         </div>
-        <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={openCreate}>
-          Add Assessment
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && (
+            <Button
+              variant="danger"
+              size="sm"
+              icon={<Square size={12} className="fill-current" />}
+              onClick={() => {
+                stopAcademicMode();
+                navigate('/courses');
+              }}
+              title="Stop Academic Mode (Admin)"
+            >
+              Stop Academic Mode
+            </Button>
+          )}
+          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={openCreate}>
+            Add Assessment
+          </Button>
+        </div>
       </div>
 
       {/* Type filter */}

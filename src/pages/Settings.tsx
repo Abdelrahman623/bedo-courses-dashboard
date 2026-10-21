@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   User, Database, Palette, Download, Trash2,
   Check, RefreshCw, HardDrive, LogOut, Upload, AlertTriangle,
-  Users, Shield, Mail
+  Users, Shield, Mail, GraduationCap, Square, Play
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
+import { useUIStore } from '../store/uiStore';
 import { useRoadmapStore } from '../store/roadmapStore';
 import { useNotesStore } from '../store/notesStore';
 import { useProjectsStore } from '../store/projectsStore';
@@ -25,6 +26,7 @@ export const Settings: React.FC = () => {
   const { notes } = useNotesStore();
   const { projects } = useProjectsStore();
   const { sessions, activity } = useSessionStore();
+  const { academicModeEnabled, stopAcademicMode, startAcademicMode } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
 
@@ -935,6 +937,56 @@ export const Settings: React.FC = () => {
                   <Check size={14} /><span>{deleteSuccess}</span>
                 </div>
               )}
+
+              {/* ── Academic Mode System Control ───────────────────────── */}
+              <div className="mb-6 p-4 rounded-xl bg-[#0D1017] border border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <GraduationCap size={16} className="text-accent-amber" />
+                    <h3 className="text-sm font-semibold text-white">Academic Mode System Control</h3>
+                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold ${
+                      academicModeEnabled
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${academicModeEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+                      {academicModeEnabled ? 'ACTIVE / RUNNING' : 'STOPPED'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 max-w-xl leading-relaxed">
+                    Controls whether Academic Mode (timetabled subjects, schedules, deadlines, GPA calculation) is available. When stopped by an admin, the dashboard runs strictly in Courses mode.
+                  </p>
+                </div>
+                <div className="flex-shrink-0">
+                  {academicModeEnabled ? (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon={<Square size={12} className="fill-current" />}
+                      onClick={() => {
+                        stopAcademicMode();
+                        setDeleteSuccess('Academic mode has been stopped. Dashboard switched to standard Courses mode.');
+                        setTimeout(() => setDeleteSuccess(null), 4000);
+                      }}
+                    >
+                      Stop Academic Mode
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<Play size={12} className="fill-current" />}
+                      onClick={() => {
+                        startAcademicMode();
+                        setDeleteSuccess('Academic mode has been started.');
+                        setTimeout(() => setDeleteSuccess(null), 4000);
+                      }}
+                    >
+                      Start Academic Mode
+                    </Button>
+                  )}
+                </div>
+              </div>
 
               {!isSupabaseConfigured ? (
                 <p className="text-xs text-zinc-500">Supabase is not configured.</p>

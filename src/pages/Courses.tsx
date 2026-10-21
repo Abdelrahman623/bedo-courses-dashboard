@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, BookOpen, ExternalLink, Calendar, Trash2, Sparkles, Search, Layers, Upload, CheckCircle2, ChevronRight, FileText, ArrowRight, StickyNote, GraduationCap, CalendarDays, CalendarClock, Route } from 'lucide-react';
+import { Plus, BookOpen, ExternalLink, Calendar, Trash2, Sparkles, Search, Layers, Upload, CheckCircle2, ChevronRight, FileText, ArrowRight, StickyNote, GraduationCap, CalendarDays, CalendarClock, Route, Square } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -13,6 +13,7 @@ import { useRoadmapStore } from '../store/roadmapStore';
 import { useSessionStore } from '../store/sessionStore';
 import { useNotesStore } from '../store/notesStore';
 import { useUIStore } from '../store/uiStore';
+import { useAuth } from '../hooks/useAuth';
 import { pct, formatDate, minsToHHMM, safeUrl } from '../lib/utils';
 import type { Course, CourseMode, CourseStatus, TopicStatus, RoadmapNode, RoadmapEdge, Note } from '../types';
 import { ROADMAP_TEMPLATES, type RoadmapTemplate } from '../data/roadmapTemplates';
@@ -50,6 +51,8 @@ const TEMPLATE_CATEGORIES = [
 export const Courses: React.FC = () => {
   const navigate = useNavigate();
   const uiMode = useUIStore(s => s.mode);
+  const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
+  const { isAdmin } = useAuth();
   const {
     courses, topics, localNodes, fetchAll, addCourse, deleteCourse,
     addTopic, loadTemplate, clearRoadmap, importRoadmap,
@@ -598,6 +601,19 @@ export const Courses: React.FC = () => {
         <div className="flex items-center gap-2 flex-wrap">
           {uiMode === 'academic' ? (
             <>
+              {isAdmin && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={<Square size={12} className="fill-current" />}
+                  onClick={() => {
+                    stopAcademicMode();
+                  }}
+                  title="Stop Academic Mode (Admin)"
+                >
+                  Stop Academic Mode
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 size="sm"
