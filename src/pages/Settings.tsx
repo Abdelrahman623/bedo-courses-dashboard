@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   User, Database, Palette, Download, Trash2,
   Check, RefreshCw, HardDrive, LogOut, Upload, AlertTriangle,
-  Users, Shield, Mail, GraduationCap, Square, Play, Loader2
+  Users, Shield, Mail, GraduationCap, Square, Play, Loader2, Route, BookOpen
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -13,11 +14,13 @@ import { useNotesStore } from '../store/notesStore';
 import { useProjectsStore } from '../store/projectsStore';
 import { useSessionStore } from '../store/sessionStore';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { DefaultCoursesAdmin } from '../components/admin/DefaultCoursesAdmin';
+import { UserCoursesAdmin } from '../components/admin/UserCoursesAdmin';
 import { themeCache } from '../lib/storage';
 import { saveUserState } from '../lib/userState';
 import { ACCENT_THEMES, getActiveTheme, applyTheme } from '../lib/themes';
 
-type SettingsTab = 'profile' | 'appearance' | 'database' | 'backup' | 'users';
+type SettingsTab = 'profile' | 'appearance' | 'database' | 'backup' | 'users' | 'default_courses' | 'user_courses';
 
 
 export const Settings: React.FC = () => {
@@ -28,7 +31,20 @@ export const Settings: React.FC = () => {
   const { sessions, activity } = useSessionStore();
   const { academicModeEnabled, stopAcademicMode, startAcademicMode, isUpdatingAcademicMode } = useUIStore();
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as SettingsTab | null;
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    if (tabParam && ['profile', 'appearance', 'database', 'backup', 'users', 'default_courses', 'user_courses'].includes(tabParam)) {
+      return tabParam;
+    }
+    return 'profile';
+  });
+
+  useEffect(() => {
+    if (tabParam && ['profile', 'appearance', 'database', 'backup', 'users', 'default_courses', 'user_courses'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   // ── Profile Form State ──────────────────────────────────────────────────
   const [displayName, setDisplayName] = useState(() => {
@@ -58,7 +74,7 @@ export const Settings: React.FC = () => {
 
   // If admin access is revoked while the tab is open, bounce back to Profile.
   useEffect(() => {
-    if (!isAdmin && activeTab === 'users') setActiveTab('profile');
+    if (!isAdmin && (activeTab === 'users' || activeTab === 'default_courses' || activeTab === 'user_courses')) setActiveTab('profile');
   }, [isAdmin, activeTab]);
 
   // Fetch all users when users tab is opened
@@ -461,7 +477,11 @@ export const Settings: React.FC = () => {
               { id: 'backup', label: 'Backups & Storage', icon: HardDrive },
               // User Management is admin-only. `isAdmin` comes from
               // public.profiles.is_admin in Supabase — see supabase_admin_security.sql.
-              ...(isAdmin ? [{ id: 'users' as const, label: 'User Management', icon: Users }] : []),
+              ...(isAdmin ? [
+                { id: 'users' as const, label: 'User Management', icon: Users },
+                { id: 'default_courses' as const, label: 'Default Courses & JSON', icon: Route },
+                { id: 'user_courses' as const, label: 'All User Courses', icon: BookOpen },
+              ] : []),
             ] as ReadonlyArray<{ id: SettingsTab; label: string; icon: typeof User }>
           ).map(tab => {
             const Icon = tab.icon;
@@ -1136,6 +1156,19 @@ export const Settings: React.FC = () => {
                   )}
                 </div>
               )}
+            </Card>
+          )}
+          {/* ── TAB 6: DEFAULT COURSES & JSON (ADMIN) ──────────────── */}
+          {activeTab === 'default_courses' && isAdmin && (
+            <Card hover={false} padding="p-6">
+              <DefaultCoursesAdmin />
+            </Card>
+          )}
+
+          {/* ── TAB 7: ALL USER COURSES (ADMIN) ─────────────────────── */}
+          {activeTab === 'user_courses' && isAdmin && (
+            <Card hover={false} padding="p-6">
+              <UserCoursesAdmin />
             </Card>
           )}
         </div>

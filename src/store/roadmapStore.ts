@@ -4,7 +4,7 @@ import { getActiveUserId } from '../lib/storage';
 import { loadUserState, queueUserState } from '../lib/userState';
 import type {
   Course, Topic, Roadmap, TopicStatus, RoadmapNode, RoadmapEdge,
-  CourseMode, Schedule, Assessment, Grade, CourseGrade,
+  CourseMode, Schedule, Assessment, Grade, CourseGrade, AdminCourseItem,
 } from '../types';
 import { ROADMAP_TEMPLATES, type RoadmapTemplate } from '../data/roadmapTemplates';
 import { slugify, safeUrl } from '../lib/utils';
@@ -47,9 +47,23 @@ interface RoadmapState {
   localEdges: RoadmapEdge[];
   activeTemplateId: string | null;
   customTemplates: Record<string, RoadmapTemplate>;
+  dbTemplates: Record<string, RoadmapTemplate>;
   progressByTemplate: Record<string, PathProgress>;
 
   fetchAll: () => Promise<void>;
+  fetchDbTemplates: () => Promise<void>;
+  getAllTemplates: () => Record<string, RoadmapTemplate>;
+
+  // ── Admin Course & Template Controls ─────────────────────────────────────
+  adminSaveTemplate: (template: RoadmapTemplate) => Promise<{ success: boolean; error?: string }>;
+  adminDeleteTemplate: (templateId: string) => Promise<{ success: boolean; error?: string }>;
+  adminListAllCourses: () => Promise<AdminCourseItem[]>;
+  adminSaveUserCourseJson: (
+    courseId: string,
+    courseData: Partial<Course>,
+    topicsData?: Partial<Topic>[]
+  ) => Promise<{ success: boolean; error?: string }>;
+  adminDeleteUserCourse: (courseId: string) => Promise<{ success: boolean; error?: string }>;
   persistCanvas: () => void;
   updateTopicStatus: (id: string, status: TopicStatus) => Promise<void>;
   addTopic: (topic: {
@@ -140,7 +154,46 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   localEdges: [],
   activeTemplateId: null,
   customTemplates: {},
+  dbTemplates: {},
   progressByTemplate: {},
+
+  getAllTemplates: () => {
+    const { dbTemplates, customTemplates } = get();
+    return { ...ROADMAP_TEMPLATES, ...dbTemplates, ...customTemplates };
+  },
+
+  fetchDbTemplates: async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data, error } = await supabase
+        .from('roadmap_templates')
+        .select('*')
+        .eq('is_active', true);
+      if (error) {
+        console.warn('[RoadmapStore] Failed to fetch roadmap_templates:', error.message);
+        return;
+      }
+      if (data) {
+        const mapped: Record<string, RoadmapTemplate> = {};
+        data.forEach((row: any) => {
+          mapped[row.id] = {
+            id: row.id,
+            name: row.name,
+            category: row.category,
+            icon: row.icon || 'Route',
+            badge: row.badge || 'Curriculum',
+            description: row.description || '',
+            roadmapUrl: row.roadmap_url || '',
+            nodes: Array.isArray(row.nodes) ? row.nodes : [],
+            edges: Array.isArray(row.edges) ? row.edges : [],
+          };
+        });
+        set({ dbTemplates: mapped });
+      }
+    } catch (err) {
+      console.warn('[RoadmapStore] Error fetching roadmap_templates:', err);
+    }
+  },
 
   /** Debounced save of the whole canvas to the account. */
   persistCanvas: () => {
@@ -230,6 +283,8 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
         progressByTemplate: migratedProgress,
       });
 
+      await get().fetchDbTemplates();
+
       // Repair accounts where a template was loaded as the Primary Path
       // before it had a matching `courses` row (the bug that made the
       // course dropdown empty everywhere it should have shown this path).
@@ -237,7 +292,7 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       // completed/in-progress topics aren't reset.
       const activeTplId = canvas.activeTemplateId;
       if (activeTplId) {
-        const allTpls = { ...ROADMAP_TEMPLATES, ...(canvas.customTemplates ?? {}) };
+        const allTpls = get().getAllTemplates();
         const tpl = allTpls[activeTplId];
         const alreadyEnrolled = (courses as Course[] | null)?.some(
           c => c.roadmap_id === tpl?.id ||
@@ -386,7 +441,7 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   },
 
   loadTemplate: (templateKey) => {
-    const tpl = get().customTemplates[templateKey] || ROADMAP_TEMPLATES[templateKey];
+    const tpl = get().getAllTemplates()[templateKey];
     if (!tpl) return;
 
     // Resume this path exactly where it was left (persistCanvas keeps
@@ -527,7 +582,7 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
 
   addTemplateAsCourse: async (templateKey: string) => {
     const isCustomTemplate = Boolean(get().customTemplates[templateKey]);
-    const tpl = get().customTemplates[templateKey] || ROADMAP_TEMPLATES[templateKey];
+    const tpl = get().getAllTemplates()[templateKey];
     if (!tpl) throw new Error(`Template ${templateKey} not found`);
 
     const existing = get().courses.find(c =>
@@ -793,6 +848,230 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
 
     if (gradePoints.length === 0) return null;
     return gradePoints.reduce((sum, gp) => sum + gp, 0) / gradePoints.length;
+  },
+
+  // ── Admin Course & Template Controls ─────────────────────────────────────
+  adminSaveTemplate: async (template) => {
+    if (!isSupabaseConfigured) {
+      set(s => ({ dbTemplates: { ...s.dbTemplates, [template.id]: template } }));
+      return { success: true };
+    }
+
+    try {
+      // 1. Try RPC admin_save_roadmap_template
+      const { data, error: rpcErr } = await supabase.rpc('admin_save_roadmap_template', {
+        p_template: {
+          id: template.id,
+          name: template.name,
+          category: template.category,
+          icon: template.icon,
+          badge: template.badge,
+          description: template.description,
+          roadmap_url: template.roadmapUrl,
+          nodes: template.nodes,
+          edges: template.edges,
+          is_active: true,
+        },
+      });
+
+      if (!rpcErr && data && data.success !== false) {
+        set(s => ({ dbTemplates: { ...s.dbTemplates, [template.id]: template } }));
+        return { success: true };
+      }
+
+      // 2. Direct upsert fallback
+      const { error: upsertErr } = await supabase
+        .from('roadmap_templates')
+        .upsert({
+          id: template.id,
+          name: template.name,
+          category: template.category,
+          icon: template.icon,
+          badge: template.badge,
+          description: template.description,
+          roadmap_url: template.roadmapUrl,
+          nodes: template.nodes,
+          edges: template.edges,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id' });
+
+      if (upsertErr) {
+        return { success: false, error: upsertErr.message };
+      }
+
+      set(s => ({ dbTemplates: { ...s.dbTemplates, [template.id]: template } }));
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Database error';
+      return { success: false, error: msg };
+    }
+  },
+
+  adminDeleteTemplate: async (templateId) => {
+    if (!isSupabaseConfigured) {
+      const next = { ...get().dbTemplates };
+      delete next[templateId];
+      set({ dbTemplates: next });
+      return { success: true };
+    }
+
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('admin_delete_roadmap_template', {
+        p_id: templateId,
+      });
+
+      if (!rpcErr && data && data.success !== false) {
+        const next = { ...get().dbTemplates };
+        delete next[templateId];
+        set({ dbTemplates: next });
+        return { success: true };
+      }
+
+      const { error: delErr } = await supabase
+        .from('roadmap_templates')
+        .delete()
+        .eq('id', templateId);
+
+      if (delErr) {
+        return { success: false, error: delErr.message };
+      }
+
+      const next = { ...get().dbTemplates };
+      delete next[templateId];
+      set({ dbTemplates: next });
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Database error';
+      return { success: false, error: msg };
+    }
+  },
+
+  adminListAllCourses: async () => {
+    if (!isSupabaseConfigured) {
+      return get().courses.map(c => ({
+        course_id: c.id,
+        user_id: c.user_id,
+        user_name: 'Local User',
+        user_email: 'local@example.com',
+        user_is_admin: true,
+        title: c.title,
+        mode: c.mode,
+        status: c.status,
+        source: c.source,
+        source_url: c.source_url,
+        start_date: c.start_date,
+        roadmap_id: c.roadmap_id,
+        created_at: c.created_at,
+        topic_count: get().topics.filter(t => t.course_id === c.id).length,
+        completed_topic_count: get().topics.filter(t => t.course_id === c.id && t.status === 'completed').length,
+      }));
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('admin_list_all_courses');
+      if (error) {
+        console.warn('[RoadmapStore] admin_list_all_courses RPC failed, falling back:', error.message);
+        const { data: cData } = await supabase
+          .from('courses')
+          .select(`
+            id, user_id, title, mode, status, source, source_url, start_date, roadmap_id, created_at,
+            topics:topics(id, status)
+          `)
+          .order('created_at', { ascending: false });
+
+        if (cData) {
+          return cData.map((row: any) => ({
+            course_id: row.id,
+            user_id: row.user_id,
+            user_name: 'User ' + (row.user_id ? row.user_id.slice(0, 6) : 'anon'),
+            user_email: row.user_id || 'unknown',
+            user_is_admin: false,
+            title: row.title,
+            mode: row.mode || 'courses',
+            status: row.status,
+            source: row.source || 'user',
+            source_url: row.source_url,
+            start_date: row.start_date,
+            roadmap_id: row.roadmap_id,
+            created_at: row.created_at,
+            topic_count: row.topics?.length || 0,
+            completed_topic_count: row.topics?.filter((t: any) => t.status === 'completed').length || 0,
+          }));
+        }
+        return [];
+      }
+      return (data as AdminCourseItem[]) || [];
+    } catch (err) {
+      console.error('[RoadmapStore] adminListAllCourses threw:', err);
+      return [];
+    }
+  },
+
+  adminSaveUserCourseJson: async (courseId, courseData, topicsData) => {
+    if (!isSupabaseConfigured) return { success: true };
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('admin_save_user_course_json', {
+        p_course_id: courseId,
+        p_course_data: courseData,
+        p_topics_data: topicsData || null,
+      });
+
+      if (!rpcErr && data && data.success !== false) {
+        await get().fetchAll();
+        return { success: true };
+      }
+
+      const { error: courseErr } = await supabase
+        .from('courses')
+        .update(courseData)
+        .eq('id', courseId);
+
+      if (courseErr) return { success: false, error: courseErr.message };
+
+      if (topicsData && topicsData.length > 0) {
+        for (const t of topicsData) {
+          if (t.id) {
+            await supabase.from('topics').upsert({
+              id: t.id,
+              course_id: courseId,
+              title: t.title,
+              phase: t.phase,
+              status: t.status || 'not_started',
+            });
+          }
+        }
+      }
+
+      await get().fetchAll();
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Database update failed';
+      return { success: false, error: msg };
+    }
+  },
+
+  adminDeleteUserCourse: async (courseId) => {
+    if (!isSupabaseConfigured) {
+      set(s => ({ courses: s.courses.filter(c => c.id !== courseId) }));
+      return { success: true };
+    }
+    try {
+      const { data, error: rpcErr } = await supabase.rpc('admin_delete_user_course', {
+        p_course_id: courseId,
+      });
+      if (!rpcErr && data && data.success !== false) {
+        await get().fetchAll();
+        return { success: true };
+      }
+      const { error: delErr } = await supabase.from('courses').delete().eq('id', courseId);
+      if (delErr) return { success: false, error: delErr.message };
+      await get().fetchAll();
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Database error';
+      return { success: false, error: msg };
+    }
   },
 }));
 

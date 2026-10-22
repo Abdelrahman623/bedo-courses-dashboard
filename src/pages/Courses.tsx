@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, BookOpen, ExternalLink, Calendar, Trash2, Sparkles, Search, Layers, Upload, CheckCircle2, ChevronRight, FileText, ArrowRight, StickyNote, GraduationCap, CalendarDays, CalendarClock, Route, Square, Loader2 } from 'lucide-react';
+import { Plus, BookOpen, ExternalLink, Calendar, Trash2, Sparkles, Search, Layers, Upload, CheckCircle2, ChevronRight, FileText, ArrowRight, StickyNote, GraduationCap, CalendarDays, CalendarClock, Route, Square, Loader2, Users } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -689,6 +689,28 @@ export const Courses: React.FC = () => {
             </>
           ) : (
             <>
+              {isAdmin && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Route size={13} className="text-accent-amber" />}
+                  onClick={() => navigate('/settings?tab=default_courses')}
+                  title="Manage Default Courses & Edit JSON"
+                >
+                  Default Courses & JSON
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Users size={13} className="text-blue-400" />}
+                  onClick={() => navigate('/settings?tab=user_courses')}
+                  title="Directory of all user courses across accounts"
+                >
+                  All User Courses
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 size="sm"

@@ -57,6 +57,25 @@ export interface Course {
   created_at: string;
 }
 
+export interface AdminCourseItem {
+  course_id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  user_username?: string;
+  user_is_admin: boolean;
+  title: string;
+  mode: CourseMode;
+  status: CourseStatus;
+  source: CourseSource;
+  source_url?: string;
+  start_date?: string;
+  roadmap_id?: string;
+  created_at: string;
+  topic_count: number;
+  completed_topic_count: number;
+}
+
 // ─── Academic mode: schedule / assessments / grades ──────────────────────────
 export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday ... 6 = Saturday
 
