@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Flame, Clock, Target, Plus, ArrowRight,
@@ -16,7 +16,35 @@ import { pct } from '../../lib/utils';
 
 export const CoursesHome: React.FC = () => {
   const navigate = useNavigate();
+  const dbTemplates = useRoadmapStore(s => s.dbTemplates);
+  const customTemplates = useRoadmapStore(s => s.customTemplates);
+  const deletedTemplateIds = useRoadmapStore(s => s.deletedTemplateIds);
+  const getAllTemplates = useRoadmapStore(s => s.getAllTemplates);
   const { localNodes, loadTemplate } = useRoadmapStore();
+
+  const quickStarters = useMemo(() => {
+    const all = getAllTemplates();
+    const defaults = [
+      { id: 'full-stack', label: 'Full-Stack Web', icon: '🚀', desc: 'Frontend, Backend, APIs',
+        hover: 'hover:bg-accent-amber/10 hover:border-accent-amber/30', text: 'group-hover:text-accent-amber' },
+      { id: 'data-analyst', label: 'Data Analyst', icon: '📊', desc: 'SQL, Python, BI',
+        hover: 'hover:bg-accent-secondary/10 hover:border-accent-secondary/30', text: 'group-hover:text-accent-secondary' },
+      { id: 'ai-engineer', label: 'AI Engineer', icon: '🤖', desc: 'LLMs, PyTorch, Agents',
+        hover: 'hover:bg-accent-tertiary/10 hover:border-accent-tertiary/30', text: 'group-hover:text-accent-tertiary' },
+      { id: 'cyber-security', label: 'Cybersecurity', icon: '🛡️', desc: 'Networking, Defense',
+        hover: 'hover:bg-accent-highlight/10 hover:border-accent-highlight/30', text: 'group-hover:text-accent-highlight' },
+    ];
+    const valid = defaults.filter(d => Boolean(all[d.id]));
+    if (valid.length > 0) return valid;
+    return Object.values(all).slice(0, 4).map(tpl => ({
+      id: tpl.id,
+      label: tpl.name,
+      icon: tpl.icon || '🚀',
+      desc: tpl.badge || 'Curriculum',
+      hover: 'hover:bg-accent-amber/10 hover:border-accent-amber/30',
+      text: 'group-hover:text-accent-amber',
+    }));
+  }, [dbTemplates, customTemplates, deletedTemplateIds, getAllTemplates]);
   const { weeklyMins, currentStreak, longestStreak, activity, fetchSessions } = useSessionStore();
   const { profile, user } = useAuth();
 
@@ -198,16 +226,7 @@ export const CoursesHome: React.FC = () => {
 
                 {/* Quick Starter Templates */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
-                  {[
-                    { id: 'full-stack', label: 'Full-Stack Web', icon: '🚀', desc: 'Frontend, Backend, APIs',
-                      hover: 'hover:bg-accent-amber/10 hover:border-accent-amber/30', text: 'group-hover:text-accent-amber' },
-                    { id: 'data-analyst', label: 'Data Analyst', icon: '📊', desc: 'SQL, Python, BI',
-                      hover: 'hover:bg-accent-secondary/10 hover:border-accent-secondary/30', text: 'group-hover:text-accent-secondary' },
-                    { id: 'ai-engineer', label: 'AI Engineer', icon: '🤖', desc: 'LLMs, PyTorch, Agents',
-                      hover: 'hover:bg-accent-tertiary/10 hover:border-accent-tertiary/30', text: 'group-hover:text-accent-tertiary' },
-                    { id: 'cyber-security', label: 'Cybersecurity', icon: '🛡️', desc: 'Networking, Defense',
-                      hover: 'hover:bg-accent-highlight/10 hover:border-accent-highlight/30', text: 'group-hover:text-accent-highlight' },
-                  ].map(tpl => (
+                  {quickStarters.map(tpl => (
                     <button
                       key={tpl.id}
                       onClick={() => {

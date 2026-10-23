@@ -53,6 +53,7 @@ interface RoadmapState {
 
   fetchAll: () => Promise<void>;
   fetchDbTemplates: () => Promise<void>;
+  subscribeTemplates: () => () => void;
   getAllTemplates: () => Record<string, RoadmapTemplate>;
 
   // ── Admin Course & Template Controls ─────────────────────────────────────
@@ -183,12 +184,36 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
     const { dbTemplates, customTemplates, deletedTemplateIds } = get();
     const merged = { ...ROADMAP_TEMPLATES, ...dbTemplates, ...customTemplates };
     if (deletedTemplateIds && deletedTemplateIds.length > 0) {
-      const deletedSet = new Set(deletedTemplateIds);
-      for (const id of deletedSet) {
-        delete merged[id];
+      const deletedSet = new Set(
+        deletedTemplateIds.map(id => id.toLowerCase().replace(/[-_]/g, ''))
+      );
+      for (const key of Object.keys(merged)) {
+        const normKey = key.toLowerCase().replace(/[-_]/g, '');
+        const normId = (merged[key]?.id || '').toLowerCase().replace(/[-_]/g, '');
+        if (deletedSet.has(normKey) || deletedSet.has(normId)) {
+          delete merged[key];
+        }
       }
     }
     return merged;
+  },
+
+  subscribeTemplates: () => {
+    if (!isSupabaseConfigured) return () => {};
+    const channel = supabase
+      .channel('global-roadmap-templates-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'roadmap_templates' },
+        () => {
+          void get().fetchDbTemplates();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   },
 
   fetchDbTemplates: async () => {
@@ -385,10 +410,10 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   },
 
   getActiveCourseId: () => {
-    const { courses, activeTemplateId, customTemplates } = get();
+    const { courses, activeTemplateId } = get();
     if (!courses.length) return null;
     if (activeTemplateId) {
-      const allTemplates = { ...ROADMAP_TEMPLATES, ...customTemplates };
+      const allTemplates = get().getAllTemplates();
       const tplMatch = courses.find(
         c => c.roadmap_id === activeTemplateId ||
              c.title.toLowerCase() === (allTemplates[activeTemplateId]?.name ?? '').toLowerCase()
@@ -887,7 +912,10 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
 
   // ── Admin Course & Template Controls ─────────────────────────────────────
   adminSaveTemplate: async (template) => {
-    const cleanDeleted = get().deletedTemplateIds.filter(id => id !== template.id);
+    const targetNorm = template.id.toLowerCase().replace(/[-_]/g, '');
+    const cleanDeleted = get().deletedTemplateIds.filter(
+      id => id.toLowerCase().replace(/[-_]/g, '') !== targetNorm
+    );
     writeStoredDeletedTemplates(cleanDeleted);
 
     if (!isSupabaseConfigured) {
@@ -956,19 +984,35 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   },
 
   adminDeleteTemplate: async (templateId) => {
+    const targetNorm = templateId.toLowerCase().replace(/[-_]/g, '');
     const nextDb = { ...get().dbTemplates };
-    delete nextDb[templateId];
+    for (const k of Object.keys(nextDb)) {
+      if (k.toLowerCase().replace(/[-_]/g, '') === targetNorm) {
+        delete nextDb[k];
+      }
+    }
     const nextCustom = { ...get().customTemplates };
-    delete nextCustom[templateId];
+    for (const k of Object.keys(nextCustom)) {
+      if (k.toLowerCase().replace(/[-_]/g, '') === targetNorm) {
+        delete nextCustom[k];
+      }
+    }
     const nextDeleted = Array.from(new Set([...get().deletedTemplateIds, templateId]));
     writeStoredDeletedTemplates(nextDeleted);
+
+    const activeNorm = (get().activeTemplateId || '').toLowerCase().replace(/[-_]/g, '');
+    const isCurrentActive = activeNorm === targetNorm;
 
     // Optimistically update store so UI re-renders immediately
     set({
       dbTemplates: nextDb,
       customTemplates: nextCustom,
       deletedTemplateIds: nextDeleted,
+      ...(isCurrentActive ? { activeTemplateId: null, localNodes: [], localEdges: [] } : {}),
     });
+    if (isCurrentActive) {
+      get().persistCanvas();
+    }
 
     if (!isSupabaseConfigured) {
       return { success: true };

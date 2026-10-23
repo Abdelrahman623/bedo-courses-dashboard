@@ -27,8 +27,10 @@ export const AppLayout: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
 
-  const fetchAll      = useRoadmapStore(s => s.fetchAll);
-  const fetchNotes    = useNotesStore(s => s.fetchNotes);
+  const fetchAll           = useRoadmapStore(s => s.fetchAll);
+  const fetchDbTemplates   = useRoadmapStore(s => s.fetchDbTemplates);
+  const subscribeTemplates = useRoadmapStore(s => s.subscribeTemplates);
+  const fetchNotes         = useNotesStore(s => s.fetchNotes);
   const fetchProjects = useProjectsStore(s => s.fetchProjects);
   const fetchSessions = useSessionStore(s => s.fetchSessions);
   const timerRunning  = useSessionStore(s => s.timerRunning);
@@ -59,6 +61,20 @@ export const AppLayout: React.FC = () => {
       clearInterval(interval);
     };
   }, [fetchAcademicMode, subscribeAcademicMode]);
+
+  // Sync global roadmap templates & tombstones across tabs & sessions
+  useEffect(() => {
+    void fetchDbTemplates();
+    const unsubTemplates = subscribeTemplates();
+
+    const onFocus = () => void fetchDbTemplates();
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      unsubTemplates();
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [fetchDbTemplates, subscribeTemplates]);
 
   // Also check whenever location changes to guarantee real-time page transitions
   useEffect(() => {

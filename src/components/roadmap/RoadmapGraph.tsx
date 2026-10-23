@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
 import { useRoadmapStore } from '../../store/roadmapStore';
 import type { RoadmapNode } from '../../types';
@@ -45,7 +45,27 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
   const svgRef = useRef<SVGSVGElement>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const navigate = useNavigate();
+  const dbTemplates = useRoadmapStore(s => s.dbTemplates);
+  const customTemplates = useRoadmapStore(s => s.customTemplates);
+  const deletedTemplateIds = useRoadmapStore(s => s.deletedTemplateIds);
+  const getAllTemplates = useRoadmapStore(s => s.getAllTemplates);
   const { localNodes, localEdges, setLocalTopicStatus, deleteTopic, loadTemplate } = useRoadmapStore();
+
+  const instantTemplates = useMemo(() => {
+    const all = getAllTemplates();
+    const defaults = [
+      { id: 'full-stack', label: '🚀 Full-Stack Web Dev' },
+      { id: 'data-analyst', label: '📊 Data Analyst' },
+      { id: 'ai-engineer', label: '🤖 AI Engineer' },
+      { id: 'cyber-security', label: '🛡️ Cybersecurity' },
+    ];
+    const valid = defaults.filter(d => Boolean(all[d.id]));
+    if (valid.length > 0) return valid;
+    return Object.values(all).slice(0, 4).map(t => ({
+      id: t.id,
+      label: `${t.icon || '🚀'} ${t.name}`,
+    }));
+  }, [dbTemplates, customTemplates, deletedTemplateIds, getAllTemplates]);
   const [selected, setSelected] = useState<RoadmapNode | null>(null);
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -671,12 +691,7 @@ export const RoadmapGraph: React.FC<RoadmapGraphProps> = ({ onOpenAddModal, onOp
 
           <div className="mt-8 pt-6 border-t border-white/[0.06] flex flex-wrap gap-2 justify-center">
             <span className="text-[11px] text-zinc-500 mr-1 self-center">Instant templates:</span>
-            {[
-              { id: 'full-stack', label: '🚀 Full-Stack Web Dev' },
-              { id: 'data-analyst', label: '📊 Data Analyst' },
-              { id: 'ai-engineer', label: '🤖 AI Engineer' },
-              { id: 'cyber-security', label: '🛡️ Cybersecurity' },
-            ].map(t => (
+            {instantTemplates.map(t => (
               <button
                 key={t.id}
                 onClick={() => loadTemplate(t.id)}

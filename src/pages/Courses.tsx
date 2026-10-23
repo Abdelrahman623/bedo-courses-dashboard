@@ -16,7 +16,7 @@ import { useUIStore } from '../store/uiStore';
 import { useAuth } from '../hooks/useAuth';
 import { pct, formatDate, minsToHHMM, safeUrl } from '../lib/utils';
 import type { Course, CourseMode, CourseStatus, TopicStatus, RoadmapNode, RoadmapEdge, Note } from '../types';
-import { ROADMAP_TEMPLATES, type RoadmapTemplate } from '../data/roadmapTemplates';
+import type { RoadmapTemplate } from '../data/roadmapTemplates';
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } };
 const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.35 } } };
@@ -56,6 +56,9 @@ export const Courses: React.FC = () => {
   const uiMode = academicModeEnabled ? rawMode : 'courses';
   const stopAcademicMode = useUIStore(s => s.stopAcademicMode);
   const { isAdmin } = useAuth();
+  const dbTemplates = useRoadmapStore(s => s.dbTemplates);
+  const deletedTemplateIds = useRoadmapStore(s => s.deletedTemplateIds);
+  const getAllTemplates = useRoadmapStore(s => s.getAllTemplates);
   const {
     courses, topics, localNodes, fetchAll, addCourse, deleteCourse,
     addTopic, loadTemplate, clearRoadmap, importRoadmap,
@@ -166,8 +169,8 @@ export const Courses: React.FC = () => {
   const existingPhases = Array.from(new Set(localNodes.map(n => n.phase))).filter(Boolean);
 
   const allTemplates = useMemo(() => {
-    return { ...ROADMAP_TEMPLATES, ...customTemplates };
-  }, [customTemplates]);
+    return getAllTemplates();
+  }, [dbTemplates, customTemplates, deletedTemplateIds, getAllTemplates]);
 
   // Active roadmap template resolution
   const activeTemplate = useMemo(() => {
