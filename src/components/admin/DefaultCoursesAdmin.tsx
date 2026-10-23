@@ -11,17 +11,22 @@ import { CourseJsonEditorModal } from './CourseJsonEditorModal';
 import { MilestoneManagerModal } from './MilestoneManagerModal';
 
 const CATEGORIES = [
-  { id: 'all', label: 'All Domains' },
+  { id: 'all', label: 'All Curriculums' },
   { id: 'development', label: 'Development' },
   { id: 'ai_data', label: 'AI & Data' },
   { id: 'devops_security', label: 'DevOps & Security' },
   { id: 'architecture_design', label: 'Architecture & Design' },
   { id: 'product_management', label: 'Product & Mgmt' },
-  { id: 'custom', label: 'Custom' },
+  { id: 'custom', label: 'Custom Roadmaps' },
 ] as const;
 
 export const DefaultCoursesAdmin: React.FC = () => {
-  const { getAllTemplates, adminSaveTemplate, adminDeleteTemplate } = useRoadmapStore();
+  const dbTemplates = useRoadmapStore(s => s.dbTemplates);
+  const customTemplates = useRoadmapStore(s => s.customTemplates);
+  const deletedTemplateIds = useRoadmapStore(s => s.deletedTemplateIds);
+  const getAllTemplates = useRoadmapStore(s => s.getAllTemplates);
+  const adminSaveTemplate = useRoadmapStore(s => s.adminSaveTemplate);
+  const adminDeleteTemplate = useRoadmapStore(s => s.adminDeleteTemplate);
   const showToast = useUIStore(s => s.showToast);
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -34,8 +39,9 @@ export const DefaultCoursesAdmin: React.FC = () => {
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [templateForm, setTemplateForm] = useState<Partial<RoadmapTemplate>>({});
 
-  const allTemplatesMap = getAllTemplates();
-  const templatesList = useMemo(() => Object.values(allTemplatesMap), [allTemplatesMap]);
+  const templatesList = useMemo(() => {
+    return Object.values(getAllTemplates());
+  }, [dbTemplates, customTemplates, deletedTemplateIds, getAllTemplates]);
 
   const filteredTemplates = useMemo(() => {
     return templatesList.filter(t => {
@@ -70,6 +76,20 @@ export const DefaultCoursesAdmin: React.FC = () => {
       edges: [],
     });
     setIsCreatingNew(true);
+  };
+
+  const handleOpenImportJson = () => {
+    setJsonEditingTemplate({
+      id: '',
+      name: 'New Default Course',
+      category: 'development',
+      icon: 'Route',
+      badge: 'Comprehensive',
+      description: '',
+      roadmapUrl: '',
+      nodes: [],
+      edges: [],
+    });
   };
 
   const handleSaveInfoForm = async (e: React.FormEvent) => {
@@ -114,20 +134,28 @@ export const DefaultCoursesAdmin: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header & Controls */}
+    <div className="space-y-5">
+      {/* ── Header & Primary Action ─────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-[#0D1017] border border-white/[0.08]">
         <div>
           <h3 className="text-base font-bold text-white flex items-center gap-2">
             <Route size={18} className="text-accent-amber" />
             Default Courses & Roadmap Templates
           </h3>
-          <p className="text-xs text-zinc-400 mt-1 max-w-xl">
-            Admin full control over system curriculums. You can edit the full Course JSON, manage milestones & topics, or add new default courses available to all users.
+          <p className="text-xs text-zinc-400 mt-1 max-w-xl leading-relaxed">
+            Manage system-wide curriculum templates. You can edit the full Course JSON structure, configure milestones and phases, or create new default roadmaps for all users.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Code size={14} className="text-accent-amber" />}
+            onClick={handleOpenImportJson}
+          >
+            Import from JSON
+          </Button>
           <Button
             variant="primary"
             size="sm"
@@ -139,17 +167,17 @@ export const DefaultCoursesAdmin: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter Bar */}
+      {/* ── Category Filter Pills & Search ──────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        {/* Categories */}
+        {/* Categories Bar */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
           {CATEGORIES.map(cat => (
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
                 selectedCategory === cat.id
-                  ? 'bg-accent-amber/20 text-accent-amber border border-accent-amber/40'
+                  ? 'bg-accent-amber/20 text-accent-amber border border-accent-amber/40 font-semibold'
                   : 'bg-white/[0.03] text-zinc-400 hover:text-white border border-white/[0.06]'
               }`}
             >
@@ -158,9 +186,9 @@ export const DefaultCoursesAdmin: React.FC = () => {
           ))}
         </div>
 
-        {/* Search */}
-        <div className="relative min-w-[220px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+        {/* Search Input */}
+        <div className="relative min-w-[240px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
           <input
             type="text"
             placeholder="Search default courses..."
@@ -171,8 +199,8 @@ export const DefaultCoursesAdmin: React.FC = () => {
         </div>
       </div>
 
-      {/* Course Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {/* ── Course Cards Grid with Refined Scaling & Typography ─────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3.5">
         {filteredTemplates.map(tpl => {
           const phasesCount = new Set(tpl.nodes?.map(n => n.phase || 'General')).size;
           const topicsCount = tpl.nodes?.length || 0;
@@ -180,52 +208,53 @@ export const DefaultCoursesAdmin: React.FC = () => {
           return (
             <div
               key={tpl.id}
-              className="p-4 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/[0.15] transition-all flex flex-col justify-between gap-4 group"
+              className="p-4 rounded-xl bg-[#0D1017] border border-white/[0.08] hover:border-white/[0.16] transition-all flex flex-col justify-between gap-3.5 group shadow-sm"
             >
-              <div className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="p-2 rounded-lg bg-accent-amber/10 border border-accent-amber/20 text-accent-amber">
+              <div className="space-y-2.5">
+                {/* Card Header */}
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="p-2 rounded-lg bg-accent-amber/10 border border-accent-amber/20 text-accent-amber flex-shrink-0">
                       <BookOpen size={16} />
                     </span>
-                    <div>
-                      <h4 className="text-sm font-bold text-white group-hover:text-accent-amber transition-colors">
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-bold text-white group-hover:text-accent-amber transition-colors truncate">
                         {tpl.name}
                       </h4>
-                      <span className="text-[10px] text-zinc-500 font-mono">id: {tpl.id}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono block truncate">slug: {tpl.id}</span>
                     </div>
                   </div>
 
-                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white/[0.06] text-zinc-300 border border-white/[0.08]">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white/[0.06] text-zinc-300 border border-white/[0.08] flex-shrink-0 max-w-[130px] truncate">
                     {tpl.badge || tpl.category}
                   </span>
                 </div>
 
-                {tpl.description && (
-                  <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
-                    {tpl.description}
-                  </p>
-                )}
+                {/* Description */}
+                <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed min-h-[2rem]">
+                  {tpl.description || 'Comprehensive roadmap curriculum with sequenced milestones and learning topics.'}
+                </p>
 
-                <div className="flex items-center gap-3 pt-2 text-[11px] text-zinc-400 border-t border-white/[0.04]">
-                  <span><strong>{phasesCount}</strong> milestones</span>
+                {/* Metrics */}
+                <div className="flex items-center gap-2.5 pt-2 text-[11px] text-zinc-400 border-t border-white/[0.04]">
+                  <span><strong className="text-zinc-200">{phasesCount}</strong> milestones</span>
                   <span>·</span>
-                  <span><strong>{topicsCount}</strong> topics</span>
+                  <span><strong className="text-zinc-200">{topicsCount}</strong> topics</span>
                   <span>·</span>
                   <span className="capitalize">{tpl.category.replace('_', ' ')}</span>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-white/[0.06]">
-                <div className="flex items-center gap-1">
+              {/* Action Buttons Row */}
+              <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-white/[0.06]">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {/* Edit JSON */}
                   <Button
                     variant="secondary"
                     size="sm"
                     icon={<Code size={12} className="text-accent-amber" />}
                     onClick={() => setJsonEditingTemplate(tpl)}
-                    title="Edit Raw Course JSON"
+                    title="Edit Full Course JSON"
                   >
                     Edit JSON
                   </Button>
@@ -236,21 +265,21 @@ export const DefaultCoursesAdmin: React.FC = () => {
                     size="sm"
                     icon={<Layers size={12} className="text-blue-400" />}
                     onClick={() => setMilestoneEditingTemplate(tpl)}
-                    title="Manage Milestones & Topics"
+                    title="Manage Milestones & Phases"
                   >
                     Milestones
                   </Button>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => {
                       setTemplateForm({ ...tpl });
                       setInfoEditingTemplate(tpl);
                     }}
-                    title="Edit Metadata"
-                    className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors cursor-pointer"
+                    title="Edit Metadata (Name, Category, Description)"
+                    className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-white/[0.08] transition-colors cursor-pointer"
                   >
                     <Edit3 size={13} />
                   </button>
@@ -274,7 +303,7 @@ export const DefaultCoursesAdmin: React.FC = () => {
         <div className="text-center py-16 bg-[#0D1017] rounded-xl border border-white/[0.08]">
           <BookOpen size={28} className="mx-auto text-zinc-600 mb-2" />
           <p className="text-sm font-semibold text-zinc-300">No default courses found</p>
-          <p className="text-xs text-zinc-500 mt-1">Try adjusting your category filter or search query.</p>
+          <p className="text-xs text-zinc-500 mt-1">Try selecting another domain or clearing your search query.</p>
         </div>
       )}
 
@@ -283,12 +312,20 @@ export const DefaultCoursesAdmin: React.FC = () => {
         <CourseJsonEditorModal
           open={Boolean(jsonEditingTemplate)}
           onClose={() => setJsonEditingTemplate(null)}
-          title={`Edit JSON: ${jsonEditingTemplate.name}`}
-          subtitle={`Editing default course template "${jsonEditingTemplate.id}". Any edits saved will sync to Supabase and immediately reflect for all users.`}
+          title={jsonEditingTemplate.id ? `Edit JSON: ${jsonEditingTemplate.name}` : 'Create / Import Default Course from JSON'}
+          subtitle={
+            jsonEditingTemplate.id
+              ? `Direct JSON editing for default course "${jsonEditingTemplate.id}". Updating here syncs immediately to Supabase and is available to all users.`
+              : 'Paste any Course JSON or Roadmap Template JSON below. Topics and metadata will be automatically detected and normalized.'
+          }
           initialJson={jsonEditingTemplate}
           schemaType="default_template"
           onSave={async (parsedJson) => {
-            return await adminSaveTemplate(parsedJson);
+            const res = await adminSaveTemplate(parsedJson);
+            if (res.success) {
+              setJsonEditingTemplate(null);
+            }
+            return res;
           }}
         />
       )}
@@ -322,6 +359,22 @@ export const DefaultCoursesAdmin: React.FC = () => {
           width="max-w-lg"
         >
           <form onSubmit={handleSaveInfoForm} className="space-y-3.5">
+            {isCreatingNew && (
+              <div className="p-2.5 rounded-lg bg-accent-amber/10 border border-accent-amber/20 flex items-center justify-between gap-2">
+                <span className="text-xs text-amber-200">Have a complete course JSON ready?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreatingNew(false);
+                    handleOpenImportJson();
+                  }}
+                  className="text-xs font-semibold text-accent-amber hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Code size={13} /> Switch to JSON Editor
+                </button>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1">Course Slug ID</label>
               <input

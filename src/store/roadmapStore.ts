@@ -48,6 +48,7 @@ interface RoadmapState {
   activeTemplateId: string | null;
   customTemplates: Record<string, RoadmapTemplate>;
   dbTemplates: Record<string, RoadmapTemplate>;
+  deletedTemplateIds: string[];
   progressByTemplate: Record<string, PathProgress>;
 
   fetchAll: () => Promise<void>;
@@ -142,6 +143,26 @@ interface RoadmapState {
 // behind by whoever used the browser last. It now loads from, and saves to,
 // public.user_state under the signed-in account. The `local*` names are kept
 // so the rest of the app doesn't have to change.
+
+const DELETED_TEMPLATES_STORAGE_KEY = 'bedo_deleted_template_ids';
+
+const readStoredDeletedTemplates = (): string[] => {
+  try {
+    const raw = localStorage.getItem(DELETED_TEMPLATES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeStoredDeletedTemplates = (ids: string[]) => {
+  try {
+    localStorage.setItem(DELETED_TEMPLATES_STORAGE_KEY, JSON.stringify(ids));
+  } catch (e) {
+    console.warn('[RoadmapStore] Failed to write deleted templates to localStorage', e);
+  }
+};
+
 export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   roadmaps: [],
   courses: [],
@@ -155,11 +176,19 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   activeTemplateId: null,
   customTemplates: {},
   dbTemplates: {},
+  deletedTemplateIds: readStoredDeletedTemplates(),
   progressByTemplate: {},
 
   getAllTemplates: () => {
-    const { dbTemplates, customTemplates } = get();
-    return { ...ROADMAP_TEMPLATES, ...dbTemplates, ...customTemplates };
+    const { dbTemplates, customTemplates, deletedTemplateIds } = get();
+    const merged = { ...ROADMAP_TEMPLATES, ...dbTemplates, ...customTemplates };
+    if (deletedTemplateIds && deletedTemplateIds.length > 0) {
+      const deletedSet = new Set(deletedTemplateIds);
+      for (const id of deletedSet) {
+        delete merged[id];
+      }
+    }
+    return merged;
   },
 
   fetchDbTemplates: async () => {
@@ -167,15 +196,19 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
     try {
       const { data, error } = await supabase
         .from('roadmap_templates')
-        .select('*')
-        .eq('is_active', true);
+        .select('*');
       if (error) {
         console.warn('[RoadmapStore] Failed to fetch roadmap_templates:', error.message);
         return;
       }
       if (data) {
         const mapped: Record<string, RoadmapTemplate> = {};
+        const dbDeletedIds: string[] = [];
         data.forEach((row: any) => {
+          if (row.is_active === false) {
+            dbDeletedIds.push(row.id);
+            return;
+          }
           mapped[row.id] = {
             id: row.id,
             name: row.name,
@@ -188,7 +221,9 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
             edges: Array.isArray(row.edges) ? row.edges : [],
           };
         });
-        set({ dbTemplates: mapped });
+        const combinedDeleted = Array.from(new Set([...get().deletedTemplateIds, ...dbDeletedIds]));
+        writeStoredDeletedTemplates(combinedDeleted);
+        set({ dbTemplates: mapped, deletedTemplateIds: combinedDeleted });
       }
     } catch (err) {
       console.warn('[RoadmapStore] Error fetching roadmap_templates:', err);
@@ -852,8 +887,14 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
 
   // ── Admin Course & Template Controls ─────────────────────────────────────
   adminSaveTemplate: async (template) => {
+    const cleanDeleted = get().deletedTemplateIds.filter(id => id !== template.id);
+    writeStoredDeletedTemplates(cleanDeleted);
+
     if (!isSupabaseConfigured) {
-      set(s => ({ dbTemplates: { ...s.dbTemplates, [template.id]: template } }));
+      set(s => ({
+        dbTemplates: { ...s.dbTemplates, [template.id]: template },
+        deletedTemplateIds: cleanDeleted,
+      }));
       return { success: true };
     }
 
@@ -875,7 +916,10 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       });
 
       if (!rpcErr && data && data.success !== false) {
-        set(s => ({ dbTemplates: { ...s.dbTemplates, [template.id]: template } }));
+        set(s => ({
+          dbTemplates: { ...s.dbTemplates, [template.id]: template },
+          deletedTemplateIds: cleanDeleted,
+        }));
         return { success: true };
       }
 
@@ -900,7 +944,10 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
         return { success: false, error: upsertErr.message };
       }
 
-      set(s => ({ dbTemplates: { ...s.dbTemplates, [template.id]: template } }));
+      set(s => ({
+        dbTemplates: { ...s.dbTemplates, [template.id]: template },
+        deletedTemplateIds: cleanDeleted,
+      }));
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Database error';
@@ -909,10 +956,21 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
   },
 
   adminDeleteTemplate: async (templateId) => {
+    const nextDb = { ...get().dbTemplates };
+    delete nextDb[templateId];
+    const nextCustom = { ...get().customTemplates };
+    delete nextCustom[templateId];
+    const nextDeleted = Array.from(new Set([...get().deletedTemplateIds, templateId]));
+    writeStoredDeletedTemplates(nextDeleted);
+
+    // Optimistically update store so UI re-renders immediately
+    set({
+      dbTemplates: nextDb,
+      customTemplates: nextCustom,
+      deletedTemplateIds: nextDeleted,
+    });
+
     if (!isSupabaseConfigured) {
-      const next = { ...get().dbTemplates };
-      delete next[templateId];
-      set({ dbTemplates: next });
       return { success: true };
     }
 
@@ -922,24 +980,23 @@ export const useRoadmapStore = create<RoadmapState>((set, get) => ({
       });
 
       if (!rpcErr && data && data.success !== false) {
-        const next = { ...get().dbTemplates };
-        delete next[templateId];
-        set({ dbTemplates: next });
         return { success: true };
       }
 
-      const { error: delErr } = await supabase
+      // Direct upsert tombstone fallback
+      const { error: upsertErr } = await supabase
         .from('roadmap_templates')
-        .delete()
-        .eq('id', templateId);
+        .upsert({
+          id: templateId,
+          name: templateId,
+          is_active: false,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id' });
 
-      if (delErr) {
-        return { success: false, error: delErr.message };
+      if (upsertErr) {
+        console.warn('[RoadmapStore] Tombstone upsert failed:', upsertErr.message);
       }
 
-      const next = { ...get().dbTemplates };
-      delete next[templateId];
-      set({ dbTemplates: next });
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Database error';

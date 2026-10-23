@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Users, Search, Trash2, Edit3, Code, Layers,
-  Compass, RefreshCw, UserCheck
+  Compass, RefreshCw, UserCheck, X
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
@@ -18,10 +18,16 @@ export const UserCoursesAdmin: React.FC = () => {
 
   const [courses, setCourses] = useState<AdminCourseItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedUserFilter, setSelectedUserFilter] = useState<string>('all');
+
+  // Search-First State: by default, user must search or pick a user to prevent page lag
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [showAllUsersExplicitly, setShowAllUsersExplicitly] = useState(false);
+
+  // Additional Filters
   const [selectedModeFilter, setSelectedModeFilter] = useState<string>('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
+  const [courseTitleSearch, setCourseTitleSearch] = useState('');
 
   // Modals state
   const [jsonEditingCourse, setJsonEditingCourse] = useState<AdminCourseItem | null>(null);
@@ -53,42 +59,83 @@ export const UserCoursesAdmin: React.FC = () => {
     loadData();
   }, []);
 
-  // Distinct user list for filter
-  const uniqueUsers = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; email: string }>();
+  // Distinct list of users with course counts
+  const userDirectory = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; email: string; username?: string; isAdmin: boolean; courseCount: number }>();
     courses.forEach(c => {
-      if (!map.has(c.user_id)) {
+      const existing = map.get(c.user_id);
+      if (existing) {
+        existing.courseCount += 1;
+      } else {
         map.set(c.user_id, {
           id: c.user_id,
-          name: c.user_name,
+          name: c.user_name || 'User',
           email: c.user_email,
+          username: c.user_username,
+          isAdmin: c.user_is_admin,
+          courseCount: 1,
         });
       }
     });
-    return Array.from(map.values());
+    return Array.from(map.values()).sort((a, b) => b.courseCount - a.courseCount);
   }, [courses]);
 
-  // Filtered courses
-  const filteredCourses = useMemo(() => {
-    return courses.filter(c => {
-      const matchSearch =
-        !searchQuery.trim() ||
-        c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.user_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.user_email.toLowerCase().includes(searchQuery.toLowerCase());
+  // Matching users based on search
+  const matchingUsers = useMemo(() => {
+    if (!userSearchTerm.trim()) return userDirectory;
+    const term = userSearchTerm.toLowerCase();
+    return userDirectory.filter(u =>
+      u.name.toLowerCase().includes(term) ||
+      u.email.toLowerCase().includes(term) ||
+      (u.username && u.username.toLowerCase().includes(term))
+    );
+  }, [userDirectory, userSearchTerm]);
 
-      const matchUser = selectedUserFilter === 'all' || c.user_id === selectedUserFilter;
+  // Selected user info
+  const activeSelectedUserInfo = useMemo(() => {
+    if (!selectedUser) return null;
+    return userDirectory.find(u => u.id === selectedUser) || null;
+  }, [userDirectory, selectedUser]);
+
+  // Filtered courses based on Search-First criteria
+  const displayedCourses = useMemo(() => {
+    // If no user is selected and not in "show all" mode and search term is empty, return empty list (prevents lag!)
+    const hasSearchTerm = userSearchTerm.trim().length > 0;
+    if (!selectedUser && !showAllUsersExplicitly && !hasSearchTerm) {
+      return [];
+    }
+
+    return courses.filter(c => {
+      // User filter: either exact selected user, or matching user search term
+      let matchUser = true;
+      if (selectedUser) {
+        matchUser = c.user_id === selectedUser;
+      } else if (hasSearchTerm) {
+        const term = userSearchTerm.toLowerCase();
+        matchUser =
+          c.user_name.toLowerCase().includes(term) ||
+          c.user_email.toLowerCase().includes(term) ||
+          Boolean(c.user_username && c.user_username.toLowerCase().includes(term));
+      }
+
+      // Course title filter
+      const matchCourseTitle =
+        !courseTitleSearch.trim() ||
+        c.title.toLowerCase().includes(courseTitleSearch.toLowerCase());
+
+      // Mode filter
       const matchMode = selectedModeFilter === 'all' || c.mode === selectedModeFilter;
+
+      // Status filter
       const matchStatus = selectedStatusFilter === 'all' || c.status === selectedStatusFilter;
 
-      return matchSearch && matchUser && matchMode && matchStatus;
+      return matchUser && matchCourseTitle && matchMode && matchStatus;
     });
-  }, [courses, searchQuery, selectedUserFilter, selectedModeFilter, selectedStatusFilter]);
+  }, [courses, selectedUser, showAllUsersExplicitly, userSearchTerm, courseTitleSearch, selectedModeFilter, selectedStatusFilter]);
 
   // Handle open JSON editor for user course
   const handleOpenJsonEditor = async (course: AdminCourseItem) => {
     try {
-      // Fetch topics for this course from Supabase
       const { data: topicsData } = await supabase
         .from('topics')
         .select('*')
@@ -167,16 +214,16 @@ export const UserCoursesAdmin: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header & Controls */}
+    <div className="space-y-5">
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-[#0D1017] border border-white/[0.08]">
         <div>
           <h3 className="text-base font-bold text-white flex items-center gap-2">
             <Users size={18} className="text-accent-amber" />
-            User Courses Directory (Tagged by User)
+            User Courses Directory
           </h3>
           <p className="text-xs text-zinc-400 mt-1 max-w-xl">
-            Live directory of all courses enrolled and created across all accounts. Every course is tagged with the user's name, email, and role. Full admin editing, milestone management, JSON editing, and deletion enabled.
+            Search for any registered user first to inspect and manage their courses with zero page lag. Edit milestones, modify course JSON, or manage settings on any account.
           </p>
         </div>
 
@@ -192,40 +239,149 @@ export const UserCoursesAdmin: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="p-3 rounded-xl bg-[#0D1017] border border-white/[0.08] space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-          {/* Search Input */}
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+      {/* ── User Search Box (Search First to Prevent Lag) ───────────────────── */}
+      <div className="p-4 rounded-xl bg-[#0D1017] border border-white/[0.08] space-y-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+            <Search size={14} className="text-accent-amber" />
+            <span>Search User First</span>
+          </label>
+          <span className="text-[11px] text-zinc-500 font-mono">
+            {userDirectory.length} total users across {courses.length} courses
+          </span>
+        </div>
+
+        <div className="relative">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+          <input
+            type="text"
+            placeholder="Type user's name, email, or username (e.g. 'elomda', 'hamo', '@gmail.com')..."
+            value={userSearchTerm}
+            onChange={e => {
+              setUserSearchTerm(e.target.value);
+              setSelectedUser(null);
+              setShowAllUsersExplicitly(false);
+            }}
+            className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm bg-black/40 border border-white/[0.12] text-white placeholder-zinc-500 outline-none focus:border-accent-amber/60 shadow-inner"
+          />
+          {userSearchTerm && (
+            <button
+              type="button"
+              onClick={() => {
+                setUserSearchTerm('');
+                setSelectedUser(null);
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-white rounded-md"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* User Suggestion Chips */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] text-zinc-400">
+            <span>Quick Select User:</span>
+            {!showAllUsersExplicitly && !selectedUser && (
+              <button
+                type="button"
+                onClick={() => setShowAllUsersExplicitly(true)}
+                className="text-accent-amber hover:underline text-[11px] cursor-pointer"
+              >
+                Or display all {courses.length} courses at once
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+            {matchingUsers.slice(0, 16).map(u => {
+              const isSelected = selectedUser === u.id;
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => {
+                    if (isSelected) {
+                      setSelectedUser(null);
+                    } else {
+                      setSelectedUser(u.id);
+                      setShowAllUsersExplicitly(false);
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isSelected
+                      ? 'bg-accent-amber text-bg-base font-bold shadow-md'
+                      : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.06]'
+                  }`}
+                >
+                  <UserCheck size={12} className={isSelected ? 'text-bg-base' : 'text-accent-amber'} />
+                  <span>{u.name}</span>
+                  <span className={`text-[10px] px-1 py-0.2 rounded font-mono ${isSelected ? 'bg-black/20 text-black' : 'bg-white/[0.06] text-zinc-400'}`}>
+                    {u.courseCount}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Active Selected User Card Banner ────────────────────────────────── */}
+      {activeSelectedUserInfo && (
+        <div className="p-3.5 rounded-xl bg-accent-amber/10 border border-accent-amber/30 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-accent-amber/20 border border-accent-amber/40 flex items-center justify-center font-bold text-accent-amber flex-shrink-0">
+              {activeSelectedUserInfo.name.slice(0, 1).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-white truncate">{activeSelectedUserInfo.name}</h4>
+                {activeSelectedUserInfo.isAdmin && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase">
+                    Admin
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-zinc-400 font-mono truncate">{activeSelectedUserInfo.email}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-xs text-accent-amber font-semibold">
+              {displayedCourses.length} course{displayedCourses.length === 1 ? '' : 's'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedUser(null)}
+              className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.08]"
+              title="Clear user filter"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Secondary Course Filters (Active once user is chosen or searching) ─ */}
+      {(selectedUser || userSearchTerm || showAllUsersExplicitly) && (
+        <div className="p-3 rounded-xl bg-[#0D1017] border border-white/[0.08] flex flex-wrap items-center gap-2.5">
+          {/* Course Title Filter */}
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
-              placeholder="Search course or user..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Filter course titles..."
+              value={courseTitleSearch}
+              onChange={e => setCourseTitleSearch(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-black/40 border border-white/[0.1] text-white placeholder-zinc-500 outline-none focus:border-accent-amber/50"
             />
           </div>
 
-          {/* User Filter */}
-          <select
-            value={selectedUserFilter}
-            onChange={e => setSelectedUserFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-lg text-xs bg-black/40 border border-white/[0.1] text-white outline-none"
-          >
-            <option value="all">All Users ({uniqueUsers.length})</option>
-            {uniqueUsers.map(u => (
-              <option key={u.id} value={u.id}>
-                {u.name} ({u.email})
-              </option>
-            ))}
-          </select>
-
-          {/* Mode Filter */}
+          {/* Mode Filter - wide enough so text is never truncated */}
           <select
             value={selectedModeFilter}
             onChange={e => setSelectedModeFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-lg text-xs bg-black/40 border border-white/[0.1] text-white outline-none"
+            className="px-3 py-1.5 rounded-lg text-xs bg-black/40 border border-white/[0.1] text-white outline-none min-w-[170px]"
           >
             <option value="all">All Modes</option>
             <option value="courses">Courses Mode (Roadmaps)</option>
@@ -236,7 +392,7 @@ export const UserCoursesAdmin: React.FC = () => {
           <select
             value={selectedStatusFilter}
             onChange={e => setSelectedStatusFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-lg text-xs bg-black/40 border border-white/[0.1] text-white outline-none"
+            className="px-3 py-1.5 rounded-lg text-xs bg-black/40 border border-white/[0.1] text-white outline-none min-w-[140px]"
           >
             <option value="all">All Statuses</option>
             <option value="in_progress">In Progress</option>
@@ -245,20 +401,41 @@ export const UserCoursesAdmin: React.FC = () => {
             <option value="paused">Paused</option>
           </select>
         </div>
-      </div>
+      )}
 
-      {/* Directory Table / Cards */}
-      <div className="space-y-3">
-        {loading ? (
-          <div className="text-center py-16 text-zinc-500 text-xs">Loading all user courses...</div>
-        ) : filteredCourses.length === 0 ? (
-          <div className="text-center py-16 bg-[#0D1017] rounded-xl border border-white/[0.08]">
-            <Compass size={28} className="mx-auto text-zinc-600 mb-2" />
-            <p className="text-sm font-semibold text-zinc-300">No user courses found</p>
-            <p className="text-xs text-zinc-500 mt-1">Try clearing or adjusting your search filters.</p>
+      {/* ── Empty Search Prompt (Initial State to Prevent Page Lag) ─────────── */}
+      {!selectedUser && !userSearchTerm && !showAllUsersExplicitly ? (
+        <div className="text-center py-16 px-4 bg-[#0D1017] rounded-xl border border-white/[0.08] space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-accent-amber/10 border border-accent-amber/20 flex items-center justify-center mx-auto text-accent-amber">
+            <Search size={22} />
           </div>
-        ) : (
-          filteredCourses.map(course => {
+          <h4 className="text-sm font-bold text-white">Search for a User to Inspect Courses</h4>
+          <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+            To guarantee instant page load speeds and prevent lag from rendering large databases, type a user's name or email above, or click any user chip to load their courses.
+          </p>
+          <div className="pt-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Users size={13} />}
+              onClick={() => setShowAllUsersExplicitly(true)}
+            >
+              Load All {courses.length} Courses Across All Users
+            </Button>
+          </div>
+        </div>
+      ) : loading ? (
+        <div className="text-center py-16 text-zinc-500 text-xs">Loading user courses...</div>
+      ) : displayedCourses.length === 0 ? (
+        <div className="text-center py-16 bg-[#0D1017] rounded-xl border border-white/[0.08]">
+          <Compass size={28} className="mx-auto text-zinc-600 mb-2" />
+          <p className="text-sm font-semibold text-zinc-300">No courses match your search</p>
+          <p className="text-xs text-zinc-500 mt-1">Try searching for a different user or clearing your filters.</p>
+        </div>
+      ) : (
+        /* ── Course Cards List ──────────────────────────────────────────────── */
+        <div className="space-y-3">
+          {displayedCourses.map(course => {
             const pct = course.topic_count > 0 ? Math.round((course.completed_topic_count / course.topic_count) * 100) : 0;
 
             return (
@@ -369,9 +546,9 @@ export const UserCoursesAdmin: React.FC = () => {
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
       {/* ── JSON Editor Modal for User Course ──────────────────────────────── */}
       {jsonEditingCourse && jsonEditingCoursePayload && (

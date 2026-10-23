@@ -198,7 +198,14 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Not authorised: admin access required.');
   END IF;
 
-  DELETE FROM public.roadmap_templates WHERE id = p_id;
+  -- Upsert with is_active = FALSE so that both custom and built-in templates
+  -- are marked deleted system-wide.
+  INSERT INTO public.roadmap_templates (id, name, is_active, updated_at)
+  VALUES (p_id, 'Deleted Template', FALSE, NOW())
+  ON CONFLICT (id) DO UPDATE SET
+    is_active = FALSE,
+    updated_at = NOW();
+
   RETURN jsonb_build_object('success', true, 'id', p_id);
 END;
 $$;
